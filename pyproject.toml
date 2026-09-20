@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "apexgen"
+version = "0.1.0"
+description = "Flow-matching generation of peptide binders conditioned on protein pockets"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "ApexGen contributors" }]
+dependencies = [
+  "biopython>=1.85,<1.86",
+  "gemmi>=0.6.5,<0.7",
+  "lmdb>=2.2,<3",
+  "msgpack>=1.1,<2",
+  "numpy>=1.26,<3",
+  "scipy>=1.12,<2",
+  "pyarrow>=19,<20",
+  "protobuf>=5.29.1,<6,!=5.28.0",
+  "PyYAML>=6,<7",
+  "tensorboard>=2.18,<2.21",
+  "torch>=2.10,<2.11",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "ruff>=0.5",
+]
+
+[project.scripts]
+apexgen-simplex = "apexgen.joint_v2.runtime.portable:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"apexgen.shared.geometry" = ["stereo_chemical_props.txt", "LICENSE-OPENFOLD", "OPENFOLD_NOTICE.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

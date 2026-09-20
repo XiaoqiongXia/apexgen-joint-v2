@@ -1,0 +1,15 @@
+# Tested on Linux / CPython 3.12 with PyTorch 2.10 (CPU execution).
+# CUDA wheel selection still depends on the destination server.
+torch==2.10.0
+numpy==2.5.3
+scipy==1.18.1
+gemmi==0.6.5
+lmdb==2.2.0
+msgpack==1.1.2
+pyarrow==19.0.1
+biopython==1.85
+PyYAML==6.0.2
+protobuf==5.29.6
+tensorboard==2.20.0
+pytest==8.4.2
+ruff==0.15.12

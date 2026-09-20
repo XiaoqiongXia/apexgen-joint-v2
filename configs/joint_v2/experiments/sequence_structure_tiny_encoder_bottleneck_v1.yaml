@@ -1,0 +1,160 @@
+schema_version: apexgen.training.joint_v2.sequence_structure_endpoint.v5
+contracts:
+  sequence_structure_endpoint: 43be4bc7c805c569d54c63477670b8a513988973b0d49f0790fa087e810b3fdc
+
+architecture:
+  name: joint_v2_unified_complex_sequence_structure_endpoint_refinement
+  single_dim: 64
+  pair_dim: 32
+  encoder_single_dim: 32
+  encoder_pair_dim: 16
+  # full | no_metadata_torsions | backbone_atoms | compact_geometry
+  encoder_feature_mode: full
+  encoder_blocks: 1
+  encoder_attention_heads: 4
+  decoder_parameter_sharing: true
+  decoder_blocks: 2
+  rigid_update_parameterization: openfold_compose_q_update_vec
+  translation_scale_factor: 10.0
+  structure_module:
+    c_ipa: 8
+    no_heads_ipa: 4
+    no_qk_points: 2
+    no_v_points: 4
+    dropout_rate: 0.0
+    no_transition_layers: 1
+    inf: 100000.0
+    epsilon: 0.00000001
+    stop_rotation_gradient_between_blocks: true
+  sequence_module:
+    types: 20
+    coordinate: centered_logits
+    normalization: layer_norm
+    projection: linear_to_single_dim
+    projection_initialization: openfold_default
+    context_injection: recurrent_latent_before_every_ipa_block
+    latent_update: shared_geometry_conditioned_residual_mlp
+    latent_update_initialization: zero_final
+    update: final_only_resnet_linear_from_single_dim
+    update_initialization: zero
+    final_head_blocks: 1
+    final_residual_gate: one_minus_t
+    parameter_sharing: true
+    recurrent_feedback_between_blocks: true
+    stop_gradient_between_blocks: false
+  time_conditioning:
+    type: fourier_mlp_peptide_film
+    embedding_dim: 32
+    frequencies: 16
+    frequency_schedule: integer_1_to_16
+    film_final_initialization: zero
+    inject_before_every_ipa_block: true
+    gate_every_block_frame_and_final_sequence_update_by_one_minus_t: true
+  angle_head:
+    slots: 7
+    slot_names: [phi, psi, omega, chi1, chi2, chi3, chi4]
+    hidden_dim: 32
+    blocks: 1
+    epsilon: 0.00000001
+    call: final_block_only
+    output_projection: shared_trunk_separate_backbone_and_sidechain_linear
+    sidechain_projection_initialization: appended_after_ec6a13a_modules
+
+flow:
+  state: translation_rotation_sequence_centered_logits
+  base_distribution: peptide_gaussian_translation_haar_rotation_centered_gaussian_logits
+  base_translation_sigma_angstrom: 5.0
+  base_coordinate_origin: dataset_pocket_centered_origin
+  pocket_state: native_condition_fixed
+  sequence_epsilon: 0.05
+  sequence_base_sigma: 1.0
+  training_time_distribution: continuous_uniform
+  training_time_min: 0.0
+  training_time_max: 0.95
+  training_time_max_boundary: exclusive
+  inference_solver: joint_endpoint_fractional_geodesic_centered_logit
+  inference_steps: 20
+  inference_query_time_max: 0.95
+
+loss:
+  reduction: sample_first_batch_second
+  trajectory_fape:
+    weight: 1.0
+    peptide_weight: 1.0
+    cross_weight: 1.0
+    point_type: residue_frame_origin
+    length_scale_angstrom: 10.0
+    distance_epsilon_angstrom_squared: 0.0001
+    training_clamp_distance_angstrom: null
+    validation_peptide_clamp_angstrom: 10.0
+    validation_cross_clamp_angstrom: 30.0
+  final_translation:
+    weight: 1.0
+    squared_error_scale_angstrom: 10.0
+  final_rotation:
+    weight: 1.0
+    squared_geodesic_scale_radian: 3.141592653589793
+  final_backbone_n_ca_c:
+    weight: 1.0
+    squared_error_scale_angstrom: 10.0
+  backbone_angle:
+    weight: 1.0
+    maximum_squared_sincos_distance: 4.0
+  backbone_angle_norm:
+    weight: 0.02
+  sidechain_angle:
+    weight: 1.0
+    maximum_squared_sincos_distance: 4.0
+    pi_periodic_symmetry: minimum_equivalent_target
+  sidechain_angle_norm:
+    weight: 0.02
+  sequence:
+    epsilon: 0.05
+    sigma_logit: 1.0
+    logit_weight: 1.0
+    soft_ce_weight: 1.0
+    total_weight: 1.0
+    block_weighting: final_only
+    hard_nll_role: metric_only
+  chain_continuity:
+    weight: 0.0
+    role: validation_only
+  clash:
+    weight: 0.0
+    role: validation_only
+
+precision:
+  network: bfloat16
+  geometry: float32
+  loss: float32
+  state_storage: float32
+
+offpath:
+  enabled: false
+  probability: 0.0
+  loss_weight: 0.0
+
+runtime:
+  return_intermediate_endpoints_during_training: true
+  return_intermediate_endpoints_during_inference: false
+
+training:
+  learning_rate: 0.002
+  minimum_learning_rate: 0.0001
+  weight_decay: 0.0
+  gradient_clip: 10.0
+  ema_decay: 0.999
+  maximum_optimizer_steps: 20000
+  warmup_steps: 100
+  encoder_joint_warmup_steps: null
+  batch_size: 8
+  bucket_window_batches: 32
+  num_workers: 4
+  checkpoint_every_steps: 1000
+  checkpoint_keep_last: 20
+  validation_every_steps: 1000
+  rollout_every_steps: 20001
+  rollout_panel_samples: 10
+  rollout_bases_per_sample: 4
+  rollout_clash_distance_angstrom: 2.0
+  seed: 20260831

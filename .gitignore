@@ -1,0 +1,27 @@
+# Python caches and local tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+/build/
+/dist/
+
+# Local agent/session metadata
+.claude_resources.json
+
+# Datasets, third-party assets, and generated experiment products
+/data/
+/external/
+/runs/
+/artifacts/
+
+# Heavy or reproducible report artifacts
+/reports/diagnostics/
+/reports/formal_velocity_t_grid_v3_step*/
+/reports/**/*.tiff
+/reports/**/*.png
+/reports/**/*.pdf
+/reports/**/*.svg
+/reports/**/*_curve_source.csv

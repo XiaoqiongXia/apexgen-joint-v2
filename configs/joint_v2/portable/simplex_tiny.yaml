@@ -1,0 +1,46 @@
+schema: apexgen.joint_v2.portable_simplex.v1
+model:
+  architecture:
+    single_dim: 64
+    pair_dim: 32
+    encoder_single_dim: 32
+    encoder_pair_dim: 16
+    encoder_feature_mode: full
+    encoder_blocks: 1
+    encoder_attention_heads: 4
+    decoder_blocks: 2
+    translation_scale_factor: 10.0
+    structure_module:
+      c_ipa: 8
+      no_heads_ipa: 4
+      no_qk_points: 2
+      no_v_points: 4
+      dropout_rate: 0.0
+      no_transition_layers: 1
+      inf: 100000.0
+      epsilon: 1.0e-08
+      stop_rotation_gradient_between_blocks: false
+    sequence_module:
+      final_head_blocks: 1
+    time_conditioning:
+      embedding_dim: 32
+      frequencies: 16
+    angle_head:
+      hidden_dim: 32
+      blocks: 1
+training:
+  seed: 20260920
+  batch_size: 4
+  steps: 1000
+  learning_rate: 0.001
+  weight_decay: 0.0
+  gradient_clip: 10.0
+  checkpoint_every: 250
+  precision: float32
+  alpha_max: 8.0
+  weights:
+    final_translation: 1.0
+    rotation_tangent: 1.0
+    sequence_ce: 1.0
+sampling:
+  steps: 20
