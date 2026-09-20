@@ -71,6 +71,8 @@ def validate_config(config):
         raise ValueError("model only accepts architecture; flow and losses belong to the Simplex runtime")
     if config["model"]["architecture"]["structure_module"]["stop_rotation_gradient_between_blocks"]:
         raise ValueError("Simplex requires full rotation gradients")
+    if type(config["model"]["architecture"]["structure_module"].get("geometry_update_time_gate", True)) is not bool:
+        raise ValueError("geometry_update_time_gate must be a boolean")
     return config
 
 
@@ -163,6 +165,8 @@ def train(args):
         start = 0
         if args.resume:
             saved = read_checkpoint(args.resume)
+            if saved.get("distributed_training"):
+                raise ValueError("DDP diagnostic checkpoints support evaluation/sampling, not exact-state continuation")
             if saved["config"] != config or saved["dataset_identity"] != identity or saved["split"] != args.split:
                 raise ValueError("resume configuration or dataset identity mismatch")
             if saved["device_type"] != device.type or saved["torch_version"] != str(torch.__version__):

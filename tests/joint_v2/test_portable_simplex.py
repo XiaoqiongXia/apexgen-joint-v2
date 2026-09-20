@@ -136,3 +136,10 @@ def test_training_resume_and_independent_inference_after_relocation(tmp_path):
     args.resume, args.split, args.output = moved / "checkpoint.pt", "train", tmp_path / "bad"
     with pytest.raises(ValueError, match="empty"):
         train(args)
+
+    distributed = read_checkpoint(moved / "checkpoint.pt")
+    distributed["distributed_training"] = dict(world_size=3, continuation_supported=False)
+    torch.save(distributed, moved / "ddp.pt")
+    args.resume, args.split = moved / "ddp.pt", "smoke"
+    with pytest.raises(ValueError, match="not exact-state continuation"):
+        train(args)

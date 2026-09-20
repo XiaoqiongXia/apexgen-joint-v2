@@ -35,6 +35,7 @@ class JointEndpointDecoder(nn.Module):
         epsilon: float = 1e-8,
         inf: float = 1e5,
         stop_rotation_gradient: bool = True,
+        geometry_update_time_gate: bool = True,
     ) -> None:
         super().__init__()
         self.structure_module = JointV2StructureModule(
@@ -56,6 +57,7 @@ class JointEndpointDecoder(nn.Module):
             eps=epsilon,
             inf=inf,
             stop_rotation_gradient=stop_rotation_gradient,
+            geometry_update_time_gate=geometry_update_time_gate,
         )
 
     def forward(

@@ -31,7 +31,7 @@ model:
       blocks: 1
 training:
   seed: 20260920
-  batch_size: 4
+  batch_size: 19
   steps: 1000
   learning_rate: 0.001
   weight_decay: 0.0

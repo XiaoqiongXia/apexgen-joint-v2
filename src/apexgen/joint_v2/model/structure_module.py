@@ -463,6 +463,7 @@ class JointV2StructureModule(nn.Module):
         eps: float = 1e-8,
         inf: float = 1e5,
         stop_rotation_gradient: bool = True,
+        geometry_update_time_gate: bool = True,
         sequence_output_parameterization: str = "residual",
         sequence_attention_topology: str = "global",
     ) -> None:
@@ -478,6 +479,9 @@ class JointV2StructureModule(nn.Module):
         self.blocks = blocks
         self.translation_scale = translation_scale
         self.stop_rotation_gradient = stop_rotation_gradient
+        if type(geometry_update_time_gate) is not bool:
+            raise ValueError("geometry_update_time_gate must be a boolean")
+        self.geometry_update_time_gate = geometry_update_time_gate
         self.layer_norm_s = nn.LayerNorm(c_s)
         self.layer_norm_z = nn.LayerNorm(c_z)
         self.linear_in = OpenFoldLinear(c_s, c_s)
@@ -536,6 +540,7 @@ class JointV2StructureModule(nn.Module):
         time_embedding = self.time_conditioner(time)
         gamma, beta = self.time_film(time_embedding).chunk(2, dim=-1)
         block_update_gate = (1.0 - time.float())[:, None, None]
+        geometry_update_gate = block_update_gate if self.geometry_update_time_gate else 1.0
         peptide = condition.peptide_mask[..., None]
         fixed_state = JointFlowState(
             translation=torch.where(
@@ -584,7 +589,7 @@ class JointV2StructureModule(nn.Module):
             update = (
                 torch.zeros(*single.shape[:2], 6, device=single.device, dtype=single.dtype)
                 if task == "S"
-                else self.backbone_update(single) * block_update_gate
+                else self.backbone_update(single) * geometry_update_gate
             )
             with torch.autocast(device_type=single.device.type, enabled=False):
                 update = update.float()

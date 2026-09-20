@@ -41,6 +41,7 @@ class JointV2Model(nn.Module):
         epsilon: float = 1e-8,
         inf: float = 1e5,
         stop_rotation_gradient: bool = True,
+        geometry_update_time_gate: bool = True,
     ) -> None:
         super().__init__()
         self.encoder = UnifiedComplexEncoder(
@@ -72,6 +73,7 @@ class JointV2Model(nn.Module):
             epsilon=epsilon,
             inf=inf,
             stop_rotation_gradient=stop_rotation_gradient,
+            geometry_update_time_gate=geometry_update_time_gate,
         )
 
     def encode_complex(self, condition: UnifiedComplexCondition) -> UnifiedComplexEncoding:
@@ -140,4 +142,5 @@ def build_joint_v2_model(config: dict) -> JointV2Model:
         epsilon=structure["epsilon"],
         inf=structure["inf"],
         stop_rotation_gradient=structure["stop_rotation_gradient_between_blocks"],
+        geometry_update_time_gate=structure.get("geometry_update_time_gate", True),
     )
