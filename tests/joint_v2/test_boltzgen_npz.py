@@ -11,6 +11,7 @@ import pytest
 from apexgen.joint_v2.data.batch import collate_joint_v2_records
 from apexgen.joint_v2.data.boltz_npz import adapt_boltz_npz, audit_boltz_record, decode_atom_name
 from apexgen.joint_v2.data.boltz_interfaces import describe_interfaces
+from apexgen.joint_v2.data.boltz_chain_pairs import adapt_interface_direction
 from apexgen.joint_v2.data.dataset import JointV2Dataset
 from test_boltz_npz import source_arrays, adapt
 from test_boltz_chain_pairs import doubled_target, make_pair
@@ -39,6 +40,37 @@ def native_arrays(arrays):
         for name in ('chain','res','atom') for side in (1,2)] + [('type','i1')])
     del result['connections']
     return result
+
+
+@pytest.mark.parametrize('native', [False, True])
+@pytest.mark.parametrize('direction', ['a_to_b', 'b_to_a'])
+@pytest.mark.parametrize('omitted_count', [1, 11])
+def test_fragment_contacts_survive_context_backbone_filtering(
+    tmp_path, native, direction, omitted_count,
+):
+    path, original_pair = make_pair(tmp_path, model_length=12)
+    with np.load(path) as data:
+        arrays = {key: data[key] for key in data.files}
+    if native:
+        arrays = native_arrays(arrays)
+    context_start = 0 if direction == 'a_to_b' else 24
+    for residue in arrays['residues'][context_start:context_start + omitted_count]:
+        arrays['atoms']['is_present'][int(residue['atom_idx'])] = False
+    np.savez(path, **arrays)
+    source = {key: original_pair[key] for key in (
+        'source_archive', 'source_member', 'source_npz_filename',
+        'source_structure_id', 'source_offset',
+    )}
+    source['source_size'] = path.stat().st_size
+    pairs, _ = describe_interfaces(path.read_bytes(), source)
+    if omitted_count == 11:
+        with pytest.raises(ValueError, match='target residues lost contact with retained context'):
+            adapt_interface_direction(path, pairs[0], direction)
+    else:
+        record, _ = adapt_interface_direction(path, pairs[0], direction)
+        assert record['peptide_length'] == 12
+        assert len(record['pocket_aatype']) == 11
+        assert record['interface_pair']['interface_density'] == 1.0
 
 
 @pytest.mark.parametrize('aa', range(20))

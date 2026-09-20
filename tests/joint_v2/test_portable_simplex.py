@@ -5,6 +5,8 @@ import shutil
 from types import SimpleNamespace
 
 import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 import torch
 
@@ -13,7 +15,7 @@ from apexgen.joint_v2.data.dataset import JointV2Dataset
 from apexgen.joint_v2.runtime.portable import (
     infer, load_config, read_checkpoint, train, training_batches, validate_config,
 )
-from apexgen.joint_v2.runtime.lineage import joint_v2_dataset_identity
+from apexgen.joint_v2.runtime.lineage import joint_v2_dataset_identity, sha256_file
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -52,8 +54,49 @@ def test_example_relocates_and_preserves_source_audits(tmp_path):
             record = dataset[i]
             assert Path(record["raw_path"]).is_relative_to(moved)
             audit_boltz_record(record)
+            target = record['joint_v2_target']
+            context = record['pocket_atom_xyz'][record['pocket_atom_mask'].astype(bool)]
+            for xyz, mask in zip(target['experimental_atom14'], target['experimental_atom14_mask']):
+                distances = np.linalg.norm(xyz[mask.astype(bool)][:, None] - context[None], axis=-1)
+                assert distances.min() <= 5.0 + 1e-5
     finally:
         dataset.close()
+
+
+def test_identity_requires_every_consumed_shard_and_detects_its_changes(tmp_path):
+    moved = tmp_path / 'dataset'
+    shutil.copytree(EXAMPLE, moved)
+    table = pq.read_table(moved / 'manifest.parquet')
+    rows = table.to_pylist()
+    extra = 'additional-shard'
+    shutil.copytree(moved / 'shards' / rows[0]['shard_id'], moved / 'shards' / extra)
+    rows[0]['shard_id'] = extra
+    pq.write_table(pa.Table.from_pylist(rows, schema=table.schema), moved / 'manifest.parquet')
+    metadata_path = moved / 'metadata.json'
+    metadata = json.loads(metadata_path.read_text())
+    metadata['manifest_sha256'] = sha256_file(moved / 'manifest.parquet')
+    metadata_path.write_text(json.dumps(metadata))
+    with pytest.raises(ValueError, match='manifest references undeclared tensor shards'):
+        joint_v2_dataset_identity(moved)
+    shard_path = moved / 'shards' / extra / 'data.mdb'
+    metadata['shards'].append(dict(shard_id=extra, data_mdb_sha256=sha256_file(shard_path)))
+    metadata_path.write_text(json.dumps(metadata))
+    joint_v2_dataset_identity(moved)
+    with shard_path.open('ab') as handle:
+        handle.write(b'changed')
+    with pytest.raises(ValueError, match='tensor shard digest mismatch'):
+        joint_v2_dataset_identity(moved)
+
+
+def test_identity_rejects_duplicate_shard_declarations(tmp_path):
+    moved = tmp_path / 'dataset'
+    shutil.copytree(EXAMPLE, moved)
+    metadata_path = moved / 'metadata.json'
+    metadata = json.loads(metadata_path.read_text())
+    metadata['shards'].append(metadata['shards'][0])
+    metadata_path.write_text(json.dumps(metadata))
+    with pytest.raises(ValueError, match='duplicate shard identity'):
+        joint_v2_dataset_identity(moved)
 
 
 def test_training_resume_and_independent_inference_after_relocation(tmp_path):

@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pyarrow.parquet as pq
+
 
 def sha256_file(path: str | Path) -> str:
     digest = hashlib.sha256()
@@ -101,13 +103,32 @@ def joint_v2_dataset_identity(
         raise ValueError("pocket metadata has no shard identity list")
     shard_digests: dict[str, str] = {}
     for row in declared_shards:
-        if not isinstance(row, dict) or not isinstance(row.get("shard_id"), str):
+        if (not isinstance(row, dict) or not isinstance(row.get("shard_id"), str)
+                or not row["shard_id"]):
             raise ValueError("pocket metadata contains an invalid shard identity")
         shard_id = row["shard_id"]
+        if shard_id in shard_digests:
+            raise ValueError(f"pocket metadata contains a duplicate shard identity: {shard_id}")
         digest = sha256_file(pocket_root / "shards" / shard_id / "data.mdb")
         if row.get("data_mdb_sha256") != digest:
             raise ValueError(f"pocket tensor shard digest mismatch: {shard_id}")
         shard_digests[shard_id] = digest
+
+    # The loader follows the manifest, not the metadata's shard list. Bind
+    # every included split so omitted declarations cannot bypass resume checks.
+    referenced_shards: set[str] = set()
+    manifest = pq.ParquetFile(pocket_manifest)
+    for batch in manifest.iter_batches(columns=["status", "shard_id"]):
+        for row in batch.to_pylist():
+            if row["status"] != "included":
+                continue
+            shard_id = row["shard_id"]
+            if not isinstance(shard_id, str) or not shard_id:
+                raise ValueError("included manifest row has an invalid shard identity")
+            referenced_shards.add(shard_id)
+    undeclared = referenced_shards - shard_digests.keys()
+    if undeclared:
+        raise ValueError(f"manifest references undeclared tensor shards: {sorted(undeclared)}")
 
     from apexgen.joint_v2.data.dataset import COMPLEX_DATASET_SCHEMA, COMPLEX_RECORD_SCHEMA
 

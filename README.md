@@ -150,7 +150,9 @@ Bitwise reproducibility across different GPU hardware is not guaranteed.
 
 Model/optimizer states can move to new server paths. Dataset identity uses content hashes
 of the manifest, metadata, and shards. Evaluation/sampling can use a different device or
-dataset. Model configuration is embedded in the checkpoint, so the original server's
+dataset. Every shard referenced by an included manifest row must have a unique,
+verified hash declaration in metadata; an incomplete declaration is rejected. Model
+configuration is embedded in the checkpoint, so the original server's
 config/run paths are unnecessary. Use the same Git commit where possible; this entry point
 does not provide formal-lock-level verification of all source files and dependencies.
 Historical `boltzgen_overfit.v1` checkpoints remain tied to their original scripts and are
@@ -170,6 +172,10 @@ python scripts/data/prepare_joint_v2_boltzgen.py \
 Pass the resulting `dataset/` directory to train/evaluate/sample. Each protein chain pair
 is considered in both directions. Every maximal continuous contact segment with at least
 four residues becomes a separate target sample. Disconnected segments are never stitched.
+After filtering and atom mapping, every target residue must still contact the retained
+context within 5 angstroms (with a 0.00001-angstrom coordinate-rounding tolerance).
+If any residue loses contact, the selected fragment is rejected and logged rather than
+silently trimmed or renumbered. Other valid fragments from the pair remain eligible.
 Atoms are mapped by name and amino acids by residue identity; raw NPZ integer indices
 are not reused as model indices. See `docs/boltzgen_training_pipeline.md` and
 `docs/joint_v2_boltz_npz_adapter.md` for the full conversion contract.

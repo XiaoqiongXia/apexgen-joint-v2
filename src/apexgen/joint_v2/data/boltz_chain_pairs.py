@@ -9,6 +9,7 @@ import hashlib
 from pathlib import Path
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from apexgen.joint_v2.data.boltz_npz import adapt_boltz_npz, audit_boltz_record
 from apexgen.joint_v2.data.preprocessing.records import PocketParameters
@@ -115,6 +116,19 @@ Both directions must use the same externally assigned source-structure split.
             or [k["polymer_index"] for k in keys] != list(range(lo, hi))
             or any(k["boltz_chain_name"] != target_id for k in keys)):
         raise ValueError("generated fragment was truncated, reordered or concatenated")
+    # Recheck the actual model atoms after missing-backbone filtering, context
+    # cropping and atom-slot packing. Original source contacts are insufficient.
+    context_xyz = record["pocket_atom_xyz"][record["pocket_atom_mask"].astype(bool)]
+    target = record["joint_v2_target"]
+    target_mask = target["experimental_atom14_mask"].astype(bool)
+    nearest = cKDTree(context_xyz).query(target["experimental_atom14"][target_mask])[0]
+    contact = np.zeros_like(target_mask)
+    # Centered coordinates are float32; tolerate only rounding at the 5-A edge.
+    contact[target_mask] = nearest <= pair["contact_cutoff_angstrom"] + 1e-5
+    lost = np.flatnonzero(~contact.any(axis=1))
+    if len(lost):
+        positions = [keys[int(i)]["polymer_index"] for i in lost]
+        raise ValueError(f"target residues lost contact with retained context: {positions}")
     # Provenance only: collate does not expose native interface membership of
     # the generated side as an input to the model.
     record["interface_pair"] = dict(schema=SCHEMA, pair_id=pair["pair_id"], direction=direction,
