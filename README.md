@@ -1,14 +1,82 @@
-# ApexGen Joint-v2: running on another server
+# ApexGen Joint-v2: Sequence-Structure Co-Design
 
-This repository provides a runnable pipeline from BoltzGen NPZ structures to continuous
-interface fragments, LMDB records, and conditional sequence/structure generation. It includes
-an example dataset with 19 fragments from four PDB structures. This is an exploratory
-Simplex baseline, not a formally locked training release.
+ApexGen Joint-v2 is a **sequence-structure co-design model based on flow matching,
+conditioned on pocket sequence and geometry**. It jointly generates the amino-acid
+sequence and backbone structure of a target peptide while keeping the conditioning
+pocket fixed.
+
+The model brings **continuous structural variables and discrete amino-acid identities
+into a unified continuous flow-matching framework**. Backbone geometry is represented
+by residue translations and rotations. Discrete sequence identities are represented
+during the flow by continuous probability vectors on the amino-acid simplex, then
+decoded into amino-acid categories at the end of generation.
+
+## Joint continuous state
+
+For a target of length $L$, the joint state at flow time $t$ is
+
+$$
+z_t = \{(x_i(t), R_i(t), p_i(t))\}_{i=1}^{L},
+\qquad x_i(t) \in \mathbb{R}^{3},\quad
+R_i(t) \in \mathrm{SO}(3),\quad p_i(t) \in \Delta^{19},
+$$
+
+where $\Delta^{19}$ is the probability simplex over the 20 amino-acid types.
+The conditioning input is $c=(s_{\mathrm{pocket}},g_{\mathrm{pocket}})$: pocket
+residue identities and observed geometry, together with the masks and site information
+needed to define the target region. The current sampler uses a specified target length.
+
+| State component | Continuous representation | Initial distribution | Generated output |
+|---|---|---|---|
+| Backbone position | Translation in $\mathbb{R}^{3}$ per residue | Gaussian noise | Residue positions |
+| Backbone orientation | Rotation in $\mathrm{SO}(3)$ per residue | Haar-distributed rotations | Residue frames and N/CA/C backbone atoms |
+| Amino-acid identity | Probability vector in $\Delta^{19}$ per residue | Symmetric Dirichlet noise | Discrete amino-acid sequence from final categorical logits |
+
+All three components share the normalized flow time $t\in[0,1]$ and a coupled neural
+decoder. The sequence flow evolves continuous simplex states; amino-acid labels remain
+categorical supervision and final outputs. This lets sequence and structure interact
+throughout generation while using geometry-appropriate and simplex-appropriate updates.
+
+## Model architecture
+
+1. **Pocket conditioning.** A static context encoder builds residue and pair features
+   from the pocket sequence and geometry. Its encoding is reused throughout sampling.
+2. **Joint decoding.** A time-conditioned decoder combines the pocket encoding with
+   the current noisy geometry and sequence simplex. Invariant point attention (IPA),
+   rigid-frame refinement, and sequence feature updates couple the two design tasks.
+3. **Flow integration and readout.** The network predicts structural endpoints and
+   amino-acid logits. These predictions parameterize the geometry and sequence flow
+   updates. Integration produces the backbone, and a final categorical readout produces
+   the amino-acid sequence.
+
+```mermaid
+flowchart LR
+    C["Pocket sequence and geometry"] --> E["Static context encoder"]
+    B["Translation, rotation and simplex noise"] --> Z["Joint state at time t"]
+    E --> D["Time-conditioned co-design decoder with IPA"]
+    Z --> D
+    D --> H["Structure endpoints and amino-acid logits"]
+    H --> F["Geometry and simplex flow integration"]
+    F -->|Next time step| Z
+    F --> X["Generated backbone"]
+    H -->|Final categorical readout| S["Generated amino-acid sequence"]
+```
+
+Training uses a joint objective consisting of translation endpoint error, rotation
+tangent error, and native amino-acid cross-entropy. The sequence path is Dirichlet,
+with $\alpha(t)=1+7t$ in the current configuration. At sampling time, the predicted
+categorical probabilities define a continuous simplex flow. Finite terminal Dirichlet
+concentration does not make the simplex state exactly one-hot; the final logits supply
+the discrete sequence readout.
+
+The repository includes data conversion, portable training, multi-GPU training,
+rollout evaluation, and generation. The bundled BoltzGen examples support exploratory
+training and overfitting tests.
 
 ## Installation
 
 ```bash
-git clone https://github.com/XiaoqiongXia/apexgen-joint-v2.git
+git clone --branch sequence-structure-co-design https://github.com/XiaoqiongXia/apexgen-joint-v2.git
 cd apexgen-joint-v2
 source scripts/project_tmp_env.sh
 python3.12 -m venv .venv
@@ -80,13 +148,16 @@ substitute the flow/loss fields from historical experiment YAML files.
 | Geometry state | Per-residue translation and rotation; fixed context, noisy target |
 | Sequence state | 20-component simplex; categorical logits as model output |
 | Time | Uniform[0,1); fresh time and noise at each optimization step |
-| Geometry update | Local quaternion/translation updates gated by 1−t; full rotation backpropagation |
+| Geometry update | Local quaternion/translation updates without 1−t scaling; full rotation backpropagation |
 | Sequence path | Dirichlet, alpha(t)=1+7t |
 | Loss | CA endpoint translation MSE + rotation tangent error + native AA CE; equal default weights |
 | Sampling | 20 steps; endpoint Euler translation, geodesic rotation, exponential-midpoint sequence integration |
 
 `model.architecture` controls encoder/decoder widths, block counts, and IPA heads/points.
 Decoder iterations share parameters. Architecture changes require new training.
+`model.architecture.structure_module.geometry_update_time_gate` is `false` in the
+current portable configurations. Older checkpoints that omit this option retain
+their original `1-t` scaling when loaded.
 The angle head is retained but frozen; this experiment does not train side chains or add
 FAPE, bond-length, bond-angle, or clash auxiliary losses.
 
