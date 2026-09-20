@@ -1,6 +1,6 @@
-# ApexGen Joint-v2: Sequence-Structure Co-Design
+# ApexGen: Sequence-Structure Co-Design
 
-ApexGen Joint-v2 is a **sequence-structure co-design model based on flow matching,
+ApexGen is a **sequence-structure co-design model based on flow matching,
 conditioned on pocket sequence and geometry**. It jointly generates the amino-acid
 sequence and backbone structure of a target peptide while keeping the conditioning
 pocket fixed.
