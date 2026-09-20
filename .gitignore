@@ -17,11 +17,8 @@ __pycache__/
 /runs/
 /artifacts/
 
-# Heavy or reproducible report artifacts
-/reports/diagnostics/
-/reports/formal_velocity_t_grid_v3_step*/
-/reports/**/*.tiff
-/reports/**/*.png
-/reports/**/*.pdf
-/reports/**/*.svg
-/reports/**/*_curve_source.csv
+# Local documentation, reports, and agent instructions
+/docs/
+/reports/
+/AGENTS.md
+/AGENT.md

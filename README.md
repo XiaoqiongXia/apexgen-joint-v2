@@ -248,8 +248,9 @@ context within 5 angstroms (with a 0.00001-angstrom coordinate-rounding toleranc
 If any residue loses contact, the selected fragment is rejected and logged rather than
 silently trimmed or renumbered. Other valid fragments from the pair remain eligible.
 Atoms are mapped by name and amino acids by residue identity; raw NPZ integer indices
-are not reused as model indices. See `docs/boltzgen_training_pipeline.md` and
-`docs/joint_v2_boltz_npz_adapter.md` for the full conversion contract.
+are not reused as model indices. The conversion implementation is in
+`src/apexgen/joint_v2/data/boltz_*.py` and
+`scripts/data/prepare_joint_v2_boltzgen.py`.
 
 ## Core code and validation
 
