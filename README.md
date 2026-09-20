@@ -200,3 +200,10 @@ python -m pytest --basetemp="$TMPDIR/pytest" -q tests/joint_v2/test_portable_sim
 Tests cover all 19 example source/mapping audits, loading after relocation, training/resume
 consistency, and independent evaluation and sampling. Published documentation, comments,
 and generated inventory text are maintained in English.
+
+## Larger training example
+
+[examples/boltzgen24576](examples/boltzgen24576/README.md) provides 24,576 samples in three
+Git LFS-backed LMDB shards, with CSV/Parquet indices and source NPZs (about 515 MiB).
+Run `git lfs pull --include="examples/boltzgen24576/**" --exclude=""` after pulling the code.
+The existing 19-sample example remains readable by the same storage decoder.

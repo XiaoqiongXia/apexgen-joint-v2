@@ -1,3 +1,8 @@
 *.npz binary
 *.parquet binary
 *.mdb binary
+
+# Large portable training examples use Git LFS.
+examples/boltzgen24576/dataset/shards/**/data.mdb filter=lfs diff=lfs merge=lfs -text
+examples/boltzgen24576/dataset/sources/*.npz filter=lfs diff=lfs merge=lfs -text
+examples/boltzgen24576/dataset/sample_inventory.csv whitespace=cr-at-eol

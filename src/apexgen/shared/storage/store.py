@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,7 @@ import numpy as np
 
 
 RECORD_SCHEMA_VERSION = "apexgen.tensor_record.v0"
+ZLIB_RECORD_MAGIC = b"APEXGEN_ZLIB_V1\x00"
 
 
 def _encode(value: Any) -> Any:
@@ -48,17 +50,24 @@ def _decode(value: Any) -> Any:
     return value
 
 
-def pack_record(record: dict[str, Any]) -> bytes:
+def pack_record(record: dict[str, Any], *, compression: str | None = None) -> bytes:
     """Serialize one schema-tagged record without executable Python objects."""
 
     if record.get("schema_version") != RECORD_SCHEMA_VERSION:
         raise ValueError(f"record must declare {RECORD_SCHEMA_VERSION}")
-    return msgpack.packb(_encode(record), use_bin_type=True, strict_types=True)
+    payload = msgpack.packb(_encode(record), use_bin_type=True, strict_types=True)
+    if compression is None:
+        return payload
+    if compression == "zlib":
+        return ZLIB_RECORD_MAGIC + zlib.compress(payload, level=1)
+    raise ValueError(f"unsupported record compression: {compression}")
 
 
 def unpack_record(payload: bytes) -> dict[str, Any]:
     """Deserialize and validate one tensor record."""
 
+    if payload.startswith(ZLIB_RECORD_MAGIC):
+        payload = zlib.decompress(payload[len(ZLIB_RECORD_MAGIC):])
     decoded = _decode(msgpack.unpackb(payload, raw=False, strict_map_key=True))
     if not isinstance(decoded, dict) or decoded.get("schema_version") != RECORD_SCHEMA_VERSION:
         raise ValueError("tensor record schema mismatch")
