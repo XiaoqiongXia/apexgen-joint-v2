@@ -86,15 +86,15 @@ def write_inventory_markdown(csv_path, md_path, dataset_dir):
             count += 1
             sources.add((row["source_structure_id"], row["source_archive"], row["source_member"]))
     with md_path.open("w", encoding="utf-8") as out:
-        out.write(f"# BoltzGen 模型样本清单\n\n接受的样本数：{count}。数据集：`{dataset_dir}`。\n\n")
-        out.write("每行是一条实际保存的样本；短段和拒绝原因见 dataset/directions.jsonl。\n"
-            "链 ID 是 NPZ 组装链名。区间 [start, stop) 是源链 residues.res_idx 的零基半开范围，"
-            "不是 PDB 作者残基编号。CSV 另提供一基闭区间。口袋的不连续位置逐段列出。\n\n"
-            "## 数据来源\n\n| 结构 ID | 源 NPZ / archive | member |\n|---|---|---|\n")
+        out.write(f"# BoltzGen model sample inventory\n\nAccepted samples: {count}. Dataset: `{dataset_dir}`.\n\n")
+        out.write("Each row represents a saved sample; see dataset/directions.jsonl for short runs and rejection reasons.\n"
+            "Chain IDs are NPZ assembly chain names. Ranges [start, stop) are zero-based half-open source-chain residues.res_idx positions, "
+            "not PDB author residue numbers. The CSV also provides one-based inclusive ranges. Discontinuous pocket positions are listed as separate runs.\n\n"
+            "## Data sources\n\n| Structure ID | Source NPZ / archive | Member |\n|---|---|---|\n")
         for sid, archive, member in sorted(sources):
             out.write(f"| {sid} | [{Path(archive).name}](<{archive}>) | {member} |\n")
-        out.write("\n源格式与 NPZ SHA256 见 sample_inventory.csv。\n\n## 样本\n\n"
-            "| 样本 ID | 结构 ID | 条件链 | 条件原链长 | 口袋长 | 目标链 | 目标原链长 | 目标片段长 | 目标源索引 [start,stop) | 目标序列 |\n"
+        out.write("\nSee sample_inventory.csv for source formats and NPZ SHA256 hashes.\n\n## Samples\n\n"
+            "| Sample ID | Structure ID | Context chain | Source context length | Pocket length | Target chain | Source target length | Target fragment length | Target source indices [start,stop) | Target sequence |\n"
             "|---|---|---|---:|---:|---|---:|---:|---|---|\n")
         with csv_path.open(newline="", encoding="utf-8") as stream:
             for r in csv.DictReader(stream):
@@ -102,8 +102,8 @@ def write_inventory_markdown(csv_path, md_path, dataset_dir):
                     f"{r['condition_source_length']} | {r['pocket_length']} | {r['target_chain_id']} | "
                     f"{r['target_source_length']} | {r['target_length']} | "
                     f"[{r['target_start_0based']},{r['target_stop_0based_exclusive']}) | {r['target_sequence']} |\n")
-        out.write("\n## 实际口袋的源链索引范围\n\n以下每段均为零基半开区间。\n\n"
-            "| 样本 ID | 条件链 | 不连续区间 |\n|---|---|---|\n")
+        out.write("\n## Retained pocket source-chain ranges\n\nEach run below is a zero-based half-open range.\n\n"
+            "| Sample ID | Context chain | Discontinuous ranges |\n|---|---|---|\n")
         with csv_path.open(newline="", encoding="utf-8") as stream:
             for r in csv.DictReader(stream):
                 ranges = "; ".join(f"[{lo},{hi})" for lo, hi in json.loads(r["pocket_source_ranges_0based_half_open"]))

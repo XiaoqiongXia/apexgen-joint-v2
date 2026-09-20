@@ -1,73 +1,84 @@
-# 官方 BoltzGen 19 个片段：1,000 步过拟合结果
+# Official BoltzGen 19 fragments: 1,000-step overfitting results
 
-结论：数据已能用于实际优化，当前 tiny 配置明显学到了原生序列和 CA 位置，但本轮
-**没有达到序列与骨架结构的充分过拟合**。旋转和骨架几何仍有较大误差，不能将高序列
-恢复率解释为生成骨架已正确，也不能据此判断完整 base 配置的能力。
+The data interface supports actual optimization. The tiny configuration learned native
+sequences and CA positions, but **did not fully overfit sequence and backbone structure**.
+Rotation and backbone geometry errors remain substantial. High sequence recovery does
+not imply a correct generated backbone, and these results do not establish the capacity
+of the full-size base model.
 
-协议见 `reports/boltzgen19_overfit_protocol_20260920.md`。由于四张 H100 被其他任务占满，
-使用 CPU 4 线程、124,976 参数的 tiny 配置，随机初始化，full batch=19。
-每个样本暴露 1,000 次；训练及期间/最终评估耗时约 1,065 秒（17.75 分钟，不含初始评估）。
-未改变输入样本、模型架构或三项损失；AdamW 和学习率日程按预定协议执行。
+See `reports/boltzgen19_overfit_protocol_20260920.md`. With all four H100 GPUs occupied,
+the run used four CPU threads, a randomly initialized 124,976-parameter tiny model, and
+full batch=19. Each sample received 1,000 exposures. Training plus intermediate/final
+evaluation took about 1,065 seconds (17.75 minutes), excluding initial evaluation.
+The samples, architecture, three losses, AdamW settings, and scheduled LR were unchanged.
 
-## 固定噪声去噪面板
+## Fixed-noise denoising panel
 
-同一批 19 个训练样本，每样本一个几何噪声基底与十个分层时间，共 190 个状态。
-评估不参与梯度；两端额外边界不计入此表。
+The same 19 training samples, one geometry base per sample, and ten stratified times give
+190 states. Evaluation has no gradients; separate endpoint boundaries are excluded here.
 
-| 指标 | 初始化 | 第 1,000 步 |
+| Metric | Initialization | Step 1,000 |
 |---|---:|---:|
-| 平移 MSE，Å² | 47.5930 | 0.29659 |
-| 旋转切空间损失，rad² | 1.92591 | 1.56107 |
-| 序列 CE | 2.99573 | 0.02923 |
-| 原始总损失 | 52.51469 | 1.88689 |
-| CA RMS，Å | 6.89877 | 0.54460 |
-| 序列恢复率 | 6.97% | 99.47% |
-| 残基旋转角平均误差 | 67.22° | 58.64° |
-| 骨架几何代理通过 | 3/190 | 6/190 |
+| Translation MSE, Å² | 47.5930 | 0.29659 |
+| Rotation tangent loss, rad² | 1.92591 | 1.56107 |
+| Sequence CE | 2.99573 | 0.02923 |
+| Raw total loss | 52.51469 | 1.88689 |
+| CA RMS, Å | 6.89877 | 0.54460 |
+| Sequence recovery | 6.97% | 99.47% |
+| Mean residue rotation error | 67.22° | 58.64° |
+| Backbone proxy pass | 3/190 | 6/190 |
 
-最后 100 步训练损失均值：平移 0.28671 Å²、旋转 1.40195 rad²、CE 0.03630、总计 1.72496。
-训练日志使用变化的参数和噪声，因此与固定模型面板分别报告。
+Mean training losses over the last 100 steps were translation 0.28671 Å², rotation
+1.40195 rad², CE 0.03630, and total 1.72496. Training logs mix changing weights and
+noise, so they are reported separately from fixed-model panels.
 
-最终 checkpoint 重载后，用 4 个新噪声基底评估 760 个内部时间状态：CA RMS 0.52504 Å，
-序列恢复率 99.47%，旋转角平均误差 53.87°，骨架代理通过 26/760。
-新面板额外 t=0 边界有 76 个状态：序列恢复率 95.24%，CA RMS 0.94086 Å，旋转角误差
-112.11°，骨架代理通过 0/76。这说明纯噪声起点的旋转预测仍很差。
+After reloading the final checkpoint, four fresh bases across 760 internal-time states
+gave CA RMS 0.52504 Å, sequence recovery 99.47%, mean rotation error 53.87°, and
+26/760 backbone passes. The 76 additional t=0 states gave sequence recovery 95.24%,
+CA RMS 0.94086 Å, rotation error 112.11°, and 0/76 passes. Rotation prediction from
+pure-noise initial states therefore remained poor.
 
-## 自由生成
+## Free generation
 
-初始化和最终模型使用相同的两组初始噪声，共 38 个候选，20 步积分。
-输入只含 condition；没有传入 native target，不做共价链重建或几何修复。
+Initial and final models used the same two sets of starting noise: 38 candidates,
+20 integration steps. Only conditions were inputs; native targets were not supplied.
+No covalent-chain reconstruction or geometry repair was applied.
 
-| 指标 | 初始化 | 第 1,000 步 |
+| Metric | Initialization | Step 1,000 |
 |---|---:|---:|
-| 每候选 CA RMSE 均值，Å | 11.76915 | 1.04851 |
-| 序列恢复率 | 6.97% | 96.99% |
-| 完整序列完全恢复 | 0/38 | 32/38 |
-| 残基旋转角平均误差 | 126.79° | 110.11° |
-| C–N 键长 MAE，Å | 10.00499 | 1.89100 |
-| 骨架几何代理通过 | 0/38 | 0/38 |
-| 已表示原子的 clash/violation-free 指标 | 2/38 | 12/38 |
+| Mean candidate CA RMSE, Å | 11.76915 | 1.04851 |
+| Sequence recovery | 6.97% | 96.99% |
+| Exact complete sequences | 0/38 | 32/38 |
+| Mean residue rotation error | 126.79° | 110.11° |
+| C–N bond-length MAE, Å | 10.00499 | 1.89100 |
+| Backbone proxy pass | 0/38 | 0/38 |
+| Represented-atom clash/violation-free metric | 2/38 | 12/38 |
 
-原生目标 frames 的同一骨架代理与已表示原子碰撞检查均为 19/19 通过。
-这为生成结果提供了参考，但不等于对完整源结构所有省略原子的化学筛查。
-不同片段的 condition 张量哈希均不同，没有发现完全相同 condition 对应不同监督的情况。
+Native frames passed the same backbone and represented-atom clash checks in 19/19 cases.
+This is a reference for generation, not a chemical audit of every omitted source atom.
+Condition tensor hashes differed among fragments; no identical static condition with
+conflicting supervision was found.
 
-自由生成中的 CA 列是每候选 RMSE 的算术均值；去噪面板的 CA RMS 是平移损失均值的
-平方根。序列恢复率按每样本残基比例再平均；不是把所有候选残基合并后的另一种加权。
+Rollout CA values are arithmetic means of per-candidate RMSE. Denoising-panel CA RMS is
+the square root of mean translation loss. Sequence recovery averages per-sample residue
+fractions, rather than pooling all residues into a different weighting scheme.
 
-## 产物
+## Artifacts
 
-- 运行目录：`artifacts/experiments/boltzgen19_cpu_overfit1000_20260920/`。
-- 最终模型：`checkpoint_00001000.pt`；SHA256：
-  `47d7d04f4914cb39cc04b48047af1dac729809d864e02a905e30b38a1ef607f0`。
-- `manifest.json` 固定数据、模型、运行契约、种子及源码哈希；四个 checkpoint 保存时和
-  最终采样后均核对源码。最终 checkpoint 重载权重逐项哈希一致，数据身份复查通过。
-- `completion.json`：完整执行结果；status=completed 仅代表流程结束，不是质量通过。
-- `rollout_final/cases.json`：38 个候选的逐项指标和原始 NPZ 来源。
-- `rollout_final/*.npz`：生成 N/CA/C、预测序列、原生参考和 context；模型中心化坐标，
-  site_origin 用于恢复源坐标。没有生成侧链。
-- 汇总目录：`artifacts/diagnostics/boltzgen19_cpu_overfit1000_20260920/`，包含
-  `summary.json`、`per_sample.csv`、`training_and_recovery.png` 和 PDF。
+- Run: `artifacts/experiments/boltzgen19_cpu_overfit1000_20260920/`.
+- Final model: `checkpoint_00001000.pt`; SHA256:
+  `47d7d04f4914cb39cc04b48047af1dac729809d864e02a905e30b38a1ef607f0`.
+- `manifest.json` binds data, model, runtime contract, seeds, and source hashes. Source
+  checks ran at all four checkpoint saves and after final sampling. Reloaded weights
+  matched by hash and data identity rechecks passed.
+- `completion.json`: execution results; status=completed means execution finished, not quality passed.
+- `rollout_final/cases.json`: metrics and NPZ provenance for 38 candidates.
+- `rollout_final/*.npz`: generated N/CA/C, predicted sequence, native reference, and context;
+  centered coordinates with `site_origin` for restoration. Side chains were not generated.
+- Summary: `artifacts/diagnostics/boltzgen19_cpu_overfit1000_20260920/`, including
+  `summary.json`, `per_sample.csv`, `training_and_recovery.png`, and PDF.
 
-后续若继续研究过拟合，应优先定位旋转预测和纯噪声采样的骨架错误，再考虑扩大数据。
-本轮没有为得到更好结果而改权重、延长预算或挑选更好 checkpoint，也未启动正式训练。
+Further overfitting work should first diagnose rotation prediction and backbone errors
+from pure-noise sampling before expanding the data. This run did not change weights,
+extend its budget, or select a better checkpoint to improve the reported result.
+No formal training was started.

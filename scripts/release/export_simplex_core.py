@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 
 
@@ -23,6 +24,7 @@ FILES = {
     "scripts/data/prepare_joint_v2_boltz_chain_pairs.py",
     "configs/joint_v2/experiments/sequence_structure_tiny_encoder_bottleneck_v1.yaml",
     "docs/portable_simplex_training.md", "docs/boltzgen_training_pipeline.md",
+    "docs/repository_language.md",
     "docs/boltz_interface_fragment_training.md", "docs/boltz_interface_manifest.md",
     "docs/joint_v2_boltz_npz_adapter.md",
     "tests/__init__.py", "tests/joint_v2/__init__.py", "tests/joint_v2/conftest.py",
@@ -37,6 +39,18 @@ def git(*args):
     return subprocess.check_output(["git", *args], cwd=ROOT)
 
 
+def check_english_text(name, payload):
+    """Reject untranslated CJK prose while retaining scientific Unicode symbols."""
+    if Path(name).suffix in {".npz", ".parquet", ".mdb"}:
+        return
+    try:
+        content = payload.decode("utf-8")
+    except UnicodeDecodeError:
+        return
+    if re.search(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\U00020000-\U000323af]", name + content):
+        raise ValueError(f"English-only release contains CJK text: {name}")
+
+
 def export(output, *, index=False):
     paths = git("ls-files", "-z") if index else git("ls-tree", "-r", "--name-only", "-z", "HEAD")
     available = {p.decode() for p in paths.split(b"\0") if p}
@@ -46,10 +60,12 @@ def export(output, *, index=False):
     required = FILES - {p for p in FILES if p.endswith("/__init__.py")}
     if required - selected:
         raise ValueError(f"missing source files in selected Git tree: {sorted(required - selected)}")
+    payloads = {name: git("show", (":" if index else "HEAD:") + name) for name in sorted(selected)}
+    for name, payload in payloads.items():
+        check_english_text(name, payload)
     output.mkdir(parents=True, exist_ok=False)
     hashes = {}
-    for name in sorted(selected):
-        payload = git("show", (":" if index else "HEAD:") + name)
+    for name, payload in payloads.items():
         target = output / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(payload)
@@ -57,6 +73,9 @@ def export(output, *, index=False):
     readme = (output / "docs/portable_simplex_training.md").read_bytes()
     (output / "README.md").write_bytes(readme)
     hashes["README.md"] = hashlib.sha256(readme).hexdigest()
+    instructions = (output / "docs/repository_language.md").read_bytes()
+    (output / "AGENTS.md").write_bytes(instructions)
+    hashes["AGENTS.md"] = hashlib.sha256(instructions).hexdigest()
     snapshot = dict(
         schema="apexgen.simplex_core_export.v1", source_commit=git("rev-parse", "HEAD").decode().strip(),
         source="index" if index else "HEAD", files=hashes,

@@ -188,7 +188,7 @@ def test_selected_native_files_reach_unified_dataset(tmp_path):
                         for i in range(lo,hi)]
             assert expanded == [k['polymer_index'] for k in record['pocket_residue_keys']]
         assert result['sample_inventory']['samples'] == len(records)
-        assert '不是 PDB 作者残基编号' in (tmp_path/'output'/'sample_inventory.md').read_text()
+        assert 'not PDB author residue numbers' in (tmp_path/'output'/'sample_inventory.md').read_text()
     finally: dataset.close()
     with pytest.raises(ValueError): prepare_selected(tmp_path,[],tmp_path/'empty')
     with pytest.raises(FileExistsError): prepare_selected(tmp_path,['synthetic'],tmp_path/'output')

@@ -1,72 +1,82 @@
-# BoltzGen 19 个片段：续训至 5,000 步结果
+# BoltzGen 19 fragments: results after 5,000 training steps
 
-已完成固定预算的 1,000→5,000 步续训。当前 tiny 配置在额外训练后改善了旋转和位置
-预测；最终自由生成的旋转误差为 64.07°，骨架代理通过
-0/38。是否达到质量标准必须看这些几何指标，不能由训练完成或
-序列恢复率判断。此实验只检验当前配置和预算，不能证明继续训练无效或模型必然无法拟合。
+The fixed-budget continuation from step 1,000 to step 5,000 completed. Additional training
+improved orientation and position prediction in the tiny configuration. Final free-rollout
+rotation error was 64.07°, with 0/38 candidates passing the backbone proxy. Geometry metrics,
+not completion or sequence recovery, determine whether quality criteria are met. This
+experiment does not establish that further training is ineffective or fitting is impossible.
 
-协议见 `boltzgen19_continue5k_protocol_20260920.md`。保留原 19 条记录、数据顺序、
-124,976 参数模型、等权三项损失、FP32、CPU 4 线程、Adam moments 和随机流。
-原 cosine 日程已结束，续训恒定保持末端 LR=1e-4；没有重启 warmup、增大 LR 或修改
-旋转目标。新增 4,000 步及评估耗时 69.99 分钟。
+See `boltzgen19_continue5k_protocol_20260920.md`. The run retained the 19 records/order,
+124,976-parameter model, equal loss weights, FP32, four CPU threads, Adam moments, and
+random streams. After the original cosine schedule, continuation kept LR=1e-4 without
+restarting warmup, increasing LR, or changing the rotation target. The 4,000 additional
+updates and evaluation took 69.99 minutes.
 
-## 自由生成：相同的两个噪声基底
+## Free generation with the same two noise bases
 
-每个 checkpoint 19 个样本×2 个噪声，共 38 个候选，20 步积分；输入只有条件，
-没有提供真实 target。各 checkpoint 的样本 ID 和 seed 顺序已逐项核对一致。
-直接从每残基 R/t 还原 N/CA/C，没有共价链重建或几何修复。
+Each checkpoint produced 19 samples × 2 bases = 38 candidates using 20 integration steps.
+Only conditions were supplied; native targets were not inputs. Sample IDs and seed order
+matched across checkpoints. N/CA/C was reconstructed directly from per-residue R/t,
+without covalent-chain rebuilding or geometry repair.
 
-| 总训练步数 | CA RMSE 均值 Å | 朝向误差均值 | C–N MAE Å | 序列恢复率 | 骨架代理通过 |
+| Total training steps | Mean CA RMSE Å | Mean rotation error | C–N MAE Å | Sequence recovery | Backbone proxy pass |
 |---|---:|---:|---:|---:|---:|
 | 1000 | 1.0485 | 110.11° | 1.8910 | 96.99% | 0/38 |
 | 3000 | 0.7276 | 92.22° | 1.4605 | 100.00% | 0/38 |
 | 5000 | 0.5792 | 64.07° | 1.0313 | 100.00% | 0/38 |
 
-骨架代理包含 C–N MAE≤0.15 Å 和所表示原子的碰撞检查；不等于全原子有效性或结合
-能力验证。19 个片段仅来自 4 个 PDB，38 个候选也不是 38 个独立复合物。
+The proxy includes C–N MAE≤0.15 Å and represented-atom clash checks. It does not establish
+all-atom validity or binding ability. The 19 fragments come from four PDB structures;
+the 38 candidates are not 38 independent complexes.
 
-## 新噪声去噪面板
+## Fresh-noise denoising panel
 
-与原运行的 fresh panel 使用相同四个独立于训练的基底。内部时间为每样本每基底
-10 个分层时间，共 760 个状态；t=0 的 76 个边界状态单独报告。
-自由生成的 CA 列是候选 RMSE 的平均，这里的 CA RMS 是平均位置 MSE 的平方根。
+Reuse the original run's four evaluation bases, independent of training randomness.
+Ten stratified internal times per sample/base give 760 states. The 76 t=0 boundary
+states are reported separately. Rollout CA values average candidate RMSE; panel CA RMS
+is the square root of mean translation MSE.
 
-| 总训练步数 | 内部时间 CA RMS Å | 内部时间朝向误差 | t=0 CA RMS Å | t=0 朝向误差 |
+| Total training steps | Internal-time CA RMS Å | Internal-time rotation error | t=0 CA RMS Å | t=0 rotation error |
 |---|---:|---:|---:|---:|
 | 1000 | 0.5250 | 53.87° | 0.9409 | 112.11° |
 | 3000 | 0.4380 | 43.61° | 0.8106 | 97.52° |
 | 5000 | 0.4358 | 34.03° | 0.7984 | 82.90° |
 
-全部逐时间区间、逐样本结果保存在运行目录的 fresh_panel_*.json、panel_*.json
-和 rollout_*/cases.json。训练曲线采用 50 步移动平均，不能替代固定噪声评估。
+Per-time and per-sample results are in `fresh_panel_*.json`, `panel_*.json`, and
+`rollout_*/cases.json`. Training curves use a 50-step moving average and do not replace
+fixed-noise evaluation.
 
-## 解释与后续策略
+## Interpretation and next experiments
 
-额外训练的配对结果说明模型在学习，而不是旋转损失未反传；但在本预算下仍必须根据
-最终朝向与键几何判断其欠拟合程度。低时间状态要求纠正大角度旋转，高时间真实路径
-输入本来就接近真值，不能用后者的好分数证明自由生成能力。
+The paired improvement shows learning is occurring rather than rotation gradients being
+absent. Nevertheless, final orientation and bond geometry remain underfit at this budget.
+Low-time inputs require large rotation corrections; high-time ground-truth path inputs
+already approach native geometry and cannot establish free-generation ability.
 
-建议下一轮使用四例的有限多噪声、多时间面板，检查见过/未见噪声差距；随后分别测试
-低时间过采样和 decoder 内部 refinement 从 2 次增加到 4 次。朝向辅助监督或旋转权重
-调整应另做对照。具体方案、理论目标改变的边界及官方实现参考见
-`boltzgen_rotation_learning_options_20260920.md`。
+Suggested follow-ups are a finite four-structure, multiple-noise/time panel to separate
+seen-noise fitting from unseen-noise performance, then separate tests of low-time
+oversampling and decoder refinement depth 2→4. Orientation auxiliary supervision and
+rotation-loss weighting require their own controls. The development report
+`boltzgen_rotation_learning_options_20260920.md` contains the proposed objectives and
+reference implementations.
 
-没有在这次训练中插入上述新策略，也没有根据中途结果挑选较好 checkpoint 替代预定
-最终模型。仅凭此结果不能把容量、LR、噪声覆盖、时间门控或损失尺度中的某一个确定
-为独立根因。
+None of these strategies was introduced during this run, and intermediate results did
+not replace the scheduled final checkpoint. These results alone do not isolate capacity,
+LR, noise coverage, time gating, or loss scale as an independent root cause.
 
-## 验证与产物
+## Verification and artifacts
 
-- 恢复时 228 条固定面板记录与父 checkpoint 完全相同，最大差 0；权重、Adam 状态、
-  独立噪声 RNG 和 torch RNG 均通过精确哈希检查。
-- 单步 smoke 完成保存、重载及自由采样；随机更新回放和恢复相关 5 项测试通过。
-- 3,000/5,000 步的评估模型都从磁盘重载，权重哈希与保存前一致。
-- 源码和数据身份在运行前后核对一致；本次未启动正式训练。
-- 最终 checkpoint：`artifacts/experiments/boltzgen19_cpu_continue5000_20260920/checkpoint_00005000.pt`。
-- 最终 checkpoint SHA256：`c8ef26ce3db7e4f999db2029d9b5510a87e01b53214b7a803e3ce5d5f2d976fc`。
-- 运行目录：`artifacts/experiments/boltzgen19_cpu_continue5000_20260920/`。
-- 汇总目录：`artifacts/diagnostics/boltzgen19_continue5000_20260920/`，含 summary.json、
-  milestones.csv、per_sample.csv、continuation_results.png 和 PDF。
-- 汇总脚本：`artifacts/tmp/summarize_boltzgen19_continue5k.py`。
+- All 228 restored fixed-panel rows exactly matched the parent, maximum difference zero;
+  weights, Adam state, noise RNG, and torch RNG passed exact hash checks.
+- The one-step smoke saved, reloaded, and sampled; five replay/restoration tests passed.
+- Step-3,000 and step-5,000 evaluation models were reloaded from disk, with hashes matching
+  the presave weights.
+- Source/data identities matched before and after the run. No formal training was started.
+- Final checkpoint: `artifacts/experiments/boltzgen19_cpu_continue5000_20260920/checkpoint_00005000.pt`.
+- SHA256: `c8ef26ce3db7e4f999db2029d9b5510a87e01b53214b7a803e3ce5d5f2d976fc`.
+- Run directory: `artifacts/experiments/boltzgen19_cpu_continue5000_20260920/`.
+- Summary: `artifacts/diagnostics/boltzgen19_continue5000_20260920/`, containing summary.json,
+  milestones.csv, per_sample.csv, continuation_results.png, and PDF.
+- Summary script: `artifacts/tmp/summarize_boltzgen19_continue5k.py`.
 
-![训练与结构恢复对照](../artifacts/diagnostics/boltzgen19_continue5000_20260920/continuation_results.png)
+![Training and structure recovery](../artifacts/diagnostics/boltzgen19_continue5000_20260920/continuation_results.png)
