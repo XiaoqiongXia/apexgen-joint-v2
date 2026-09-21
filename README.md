@@ -103,17 +103,27 @@ files inside the project.
 
 ## Run the example
 
-`examples/boltzgen19/dataset/` contains the manifest, LMDB records, mapping contract, and
-four source NPZ files. No additional download is required. The processed data is about
-2 MB; all 19 samples belong to the `smoke` split. See `examples/boltzgen19/README.md`
-and `SHA256SUMS` for provenance, licensing, and checksums.
+`examples/boltzgen_overfit/dataset/` is the overfitting dataset: 24,576 samples in
+three LMDB shards with precomputed pocket/peptide static features, a CSV inventory,
+a Parquet manifest, and 422 source NPZ files. All samples belong to the `smoke` split.
+Download the Git LFS objects before training:
+
+```bash
+git lfs install
+git lfs pull --include='examples/boltzgen_overfit/**' --exclude=''
+python examples/boltzgen_overfit/verify.py
+```
+
+See [the dataset README](examples/boltzgen_overfit/README.md) for provenance,
+licensing, checksums, and static-feature loading. This replaces the earlier
+`boltzgen8192_static` directory while preserving its first shard.
 
 First check the environment with two optimization steps:
 
 ```bash
 apexgen-simplex train \
   --config configs/joint_v2/portable/simplex_tiny.yaml \
-  --dataset examples/boltzgen19/dataset --split smoke \
+  --dataset examples/boltzgen_overfit/dataset --split smoke \
   --steps 2 --device cpu --output runs/example-smoke
 ```
 
@@ -122,7 +132,7 @@ Then run a 1,000-step experiment:
 ```bash
 apexgen-simplex train \
   --config configs/joint_v2/portable/simplex_tiny.yaml \
-  --dataset examples/boltzgen19/dataset --split smoke \
+  --dataset examples/boltzgen_overfit/dataset --split smoke \
   --device cuda:0 --output runs/example-fit
 ```
 
@@ -171,12 +181,12 @@ default; `bfloat16` can be selected explicitly for network operations, while geo
 ```bash
 apexgen-simplex evaluate \
   --checkpoint runs/example-fit/checkpoint_00001000.pt \
-  --dataset examples/boltzgen19/dataset --split smoke \
+  --dataset examples/boltzgen_overfit/dataset --split smoke \
   --bases 2 --device cuda:0 --output runs/example-evaluation
 
 apexgen-simplex sample \
   --checkpoint runs/example-fit/checkpoint_00001000.pt \
-  --dataset examples/boltzgen19/dataset --split smoke \
+  --dataset examples/boltzgen_overfit/dataset --split smoke \
   --bases 2 --device cuda:0 --output runs/example-samples
 ```
 
@@ -209,7 +219,7 @@ did not pass every backbone geometry check. Successful execution is not a design
 ```bash
 apexgen-simplex train \
   --config configs/joint_v2/portable/simplex_tiny.yaml \
-  --dataset examples/boltzgen19/dataset --split smoke \
+  --dataset examples/boltzgen_overfit/dataset --split smoke \
   --resume runs/example-fit/checkpoint_00001000.pt \
   --steps 5000 --device cuda:0 --output runs/example-continued
 ```
@@ -266,16 +276,19 @@ are not reused as model indices. The conversion implementation is in
 | Configuration | `configs/joint_v2/portable/simplex_tiny.yaml` |
 
 ```bash
-python -m pytest --basetemp="$TMPDIR/pytest" -q tests/joint_v2/test_portable_simplex.py
+python -m pytest --basetemp="$TMPDIR/pytest" -q tests/joint_v2/test_static_features.py tests/joint_v2/test_training_collate.py
 ```
 
-Tests cover all 19 example source/mapping audits, loading after relocation, training/resume
-consistency, and independent evaluation and sampling. Published documentation, comments,
-and generated inventory text are maintained in English.
+These tests cover static-feature integrity, migration recovery, and strict/light
+batch and training equivalence. Run the example verifier above to check the bundled
+dataset after downloading it. Published documentation, comments, and generated
+inventory text are maintained in English.
 
-## Larger training example
+## Overfitting dataset
 
-[examples/boltzgen24576](examples/boltzgen24576/README.md) provides 24,576 samples in three
-Git LFS-backed LMDB shards, with CSV/Parquet indices and source NPZs (about 515 MiB).
-Run `git lfs pull --include="examples/boltzgen24576/**" --exclude=""` after pulling the code.
-The existing 19-sample example remains readable by the same storage decoder.
+[examples/boltzgen_overfit](examples/boltzgen_overfit/README.md) provides 24,576 samples in three
+Git LFS-backed LMDB shards, with precomputed pocket/peptide features, CSV/Parquet
+indices, and source NPZs.
+Run `git lfs pull --include="examples/boltzgen_overfit/**" --exclude=""` after pulling the code.
+The split is `smoke`; this subset is intended for overfitting and pipeline checks,
+not an independent validation benchmark.

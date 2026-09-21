@@ -1,0 +1,246 @@
+{
+  "active_encoder_gradient_parameters": 0,
+  "config": "/data2/xiaoqiong/python_project/Datasets/apexgen-joint-v2-sequence-structure-codesign/configs/joint_v2/experiments/sequence_structure_tiny_encoder_bottleneck_v1.yaml",
+  "config_sha256": "f99e010bdc8ae652363f6c84d44d52fc298785ecc4e5d587098fc9309a4e4896",
+  "dataset_identity": {
+    "identity_sha256": "c599393e68ac7ac366363ce4235a62f7092dcb2cb86440641e2085e7e6feb1ab",
+    "manifest_sha256": "88c0c9bae53ab0ac372ece9bdd8aaa119ed982ae4aac2851853710ea84daa352",
+    "metadata_sha256": "c4a39223e5152ccdde4cbdbdba8facadc443eaf08a3e4628d5b4afaec72f0870",
+    "schema_version": "apexgen.joint_v2.dataset_identity.v2",
+    "shard_data_sha256": {
+      "shard-00000.lmdb": "328007a8d1217146d62039a94890db6e4041fef50acfd1405cc17376cd3e2df1",
+      "shard-00001.lmdb": "fda4c99717bdf3fd53fc3b269af0a31204c189d6f4ad9ca185b8a34a0db1f86e",
+      "shard-00002.lmdb": "45340deadffc92d720ba19a6e4b04204a5a58b72b402ec179565f1aecec26b96"
+    },
+    "storage": "unified_complex"
+  },
+  "device": "cpu",
+  "finite_backward": true,
+  "fixed_pocket_unchanged": true,
+  "formal": false,
+  "layout": [
+    6,
+    51
+  ],
+  "losses_per_sample": {
+    "final_translation": [
+      152.04266357421875,
+      55.682891845703125,
+      41.94395446777344,
+      23.850019454956055,
+      20.107223510742188,
+      3.1832127571105957
+    ],
+    "rotation_tangent": [
+      4.33921480178833,
+      2.110323190689087,
+      1.620457410812378,
+      0.8048369884490967,
+      0.4486216604709625,
+      0.10605592280626297
+    ],
+    "sequence_ce": [
+      2.995732307434082,
+      2.995732307434082,
+      2.995732307434082,
+      2.995732307434082,
+      2.995732307434082,
+      2.995732307434082
+    ],
+    "total": [
+      159.3776092529297,
+      60.78894805908203,
+      46.560142517089844,
+      27.650588989257812,
+      23.551578521728516,
+      6.285000801086426
+    ],
+    "weighted_final_translation": [
+      152.04266357421875,
+      55.682891845703125,
+      41.94395446777344,
+      23.850019454956055,
+      20.107223510742188,
+      3.1832127571105957
+    ],
+    "weighted_rotation_tangent": [
+      4.33921480178833,
+      2.110323190689087,
+      1.620457410812378,
+      0.8048369884490967,
+      0.4486216604709625,
+      0.10605592280626297
+    ],
+    "weighted_sequence_ce": [
+      2.995732307434082,
+      2.995732307434082,
+      2.995732307434082,
+      2.995732307434082,
+      2.995732307434082,
+      2.995732307434082
+    ]
+  },
+  "mapping_audits": [
+    {
+      "atoms_checked": 375,
+      "mapping_sha256": "d0f203cdf90c48713fa25cdc1f3584f0ea1f378fc2726800be158d9c824f561d",
+      "max_coordinate_error_angstrom": 7.49315535841788e-07,
+      "peptide_length": 5,
+      "pocket_chains": [
+        "A1"
+      ],
+      "pocket_length": 42,
+      "residues_checked": 47,
+      "sample_id": "10gs:chain0-chain3:a_to_b:fragment59-64",
+      "sequence": "LTLYQ",
+      "source_sha256": "134189226e851f8e6bab337228f0ab4b14114d1d04912331ab0e27d5de372abb"
+    },
+    {
+      "atoms_checked": 290,
+      "mapping_sha256": "d0f203cdf90c48713fa25cdc1f3584f0ea1f378fc2726800be158d9c824f561d",
+      "max_coordinate_error_angstrom": 6.357828823411182e-07,
+      "peptide_length": 4,
+      "pocket_chains": [
+        "G15"
+      ],
+      "pocket_length": 30,
+      "residues_checked": 34,
+      "sample_id": "1al0:chain102-chain104:b_to_a:fragment235-239",
+      "sequence": "LVMR",
+      "source_sha256": "00fb047a6b456b1cdeac0910d291dc0010c5765bcdb8f88f51aa8ff70cd1aadd"
+    },
+    {
+      "atoms_checked": 326,
+      "mapping_sha256": "d0f203cdf90c48713fa25cdc1f3584f0ea1f378fc2726800be158d9c824f561d",
+      "max_coordinate_error_angstrom": 6.935813203767793e-07,
+      "peptide_length": 5,
+      "pocket_chains": [
+        "G15"
+      ],
+      "pocket_length": 32,
+      "residues_checked": 37,
+      "sample_id": "1al0:chain102-chain104:b_to_a:fragment271-276",
+      "sequence": "VPRFF",
+      "source_sha256": "00fb047a6b456b1cdeac0910d291dc0010c5765bcdb8f88f51aa8ff70cd1aadd"
+    },
+    {
+      "atoms_checked": 216,
+      "mapping_sha256": "d0f203cdf90c48713fa25cdc1f3584f0ea1f378fc2726800be158d9c824f561d",
+      "max_coordinate_error_angstrom": 1.3623919414840202e-07,
+      "peptide_length": 9,
+      "pocket_chains": [
+        "E58"
+      ],
+      "pocket_length": 20,
+      "residues_checked": 29,
+      "sample_id": "1al2:chain402-chain404:b_to_a:fragment27-36",
+      "sequence": "AANSVVAYG",
+      "source_sha256": "35b6c47d978ff0929843c4782849e499cb936544b7b621bb0e67e0662b638337"
+    },
+    {
+      "atoms_checked": 405,
+      "mapping_sha256": "d0f203cdf90c48713fa25cdc1f3584f0ea1f378fc2726800be158d9c824f561d",
+      "max_coordinate_error_angstrom": 3.1789143406513176e-07,
+      "peptide_length": 6,
+      "pocket_chains": [
+        "C58"
+      ],
+      "pocket_length": 45,
+      "residues_checked": 51,
+      "sample_id": "1al2:chain402-chain407:a_to_b:fragment61-67",
+      "sequence": "QTRHVV",
+      "source_sha256": "35b6c47d978ff0929843c4782849e499cb936544b7b621bb0e67e0662b638337"
+    },
+    {
+      "atoms_checked": 396,
+      "mapping_sha256": "d0f203cdf90c48713fa25cdc1f3584f0ea1f378fc2726800be158d9c824f561d",
+      "max_coordinate_error_angstrom": 4.76837158203125e-07,
+      "peptide_length": 4,
+      "pocket_chains": [
+        "B31"
+      ],
+      "pocket_length": 44,
+      "residues_checked": 48,
+      "sample_id": "1ar6:chain211-chain222:a_to_b:fragment9-13",
+      "sequence": "GAHE",
+      "source_sha256": "d1953012e15fca9ba8a70a5c2fab622f01638641b14569575bb23a3ad3d7bc52"
+    }
+  ],
+  "model": "SimplexCodesignModel",
+  "nonzero_gradient_parameters": 4,
+  "numpy_version": "2.0.2",
+  "optimizer_steps": 0,
+  "perturbed_head_gradient_probe": {
+    "active_encoder_gradient_parameters": 45,
+    "losses_per_sample": {
+      "final_translation": [
+        141.5045623779297,
+        50.92823028564453,
+        39.70048141479492,
+        27.88837432861328,
+        21.465993881225586,
+        3.4043984413146973
+      ],
+      "rotation_tangent": [
+        4.315435886383057,
+        2.1046462059020996,
+        1.5874059200286865,
+        0.905432939529419,
+        0.46655380725860596,
+        0.10189813375473022
+      ],
+      "sequence_ce": [
+        3.0014126300811768,
+        2.994830846786499,
+        2.9534754753112793,
+        2.9809539318084717,
+        2.980839967727661,
+        2.9787521362304688
+      ],
+      "total": [
+        148.8214111328125,
+        56.027706146240234,
+        44.241363525390625,
+        31.774761199951172,
+        24.913389205932617,
+        6.485048770904541
+      ],
+      "weighted_final_translation": [
+        141.5045623779297,
+        50.92823028564453,
+        39.70048141479492,
+        27.88837432861328,
+        21.465993881225586,
+        3.4043984413146973
+      ],
+      "weighted_rotation_tangent": [
+        4.315435886383057,
+        2.1046462059020996,
+        1.5874059200286865,
+        0.905432939529419,
+        0.46655380725860596,
+        0.10189813375473022
+      ],
+      "weighted_sequence_ce": [
+        3.0014126300811768,
+        2.994830846786499,
+        2.9534754753112793,
+        2.9809539318084717,
+        2.980839967727661,
+        2.9787521362304688
+      ]
+    },
+    "nonzero_gradient_parameters": 76
+  },
+  "sample_ids": [
+    "10gs:chain0-chain3:a_to_b:fragment59-64",
+    "1al0:chain102-chain104:b_to_a:fragment235-239",
+    "1al0:chain102-chain104:b_to_a:fragment271-276",
+    "1al2:chain402-chain404:b_to_a:fragment27-36",
+    "1al2:chain402-chain407:a_to_b:fragment61-67",
+    "1ar6:chain211-chain222:a_to_b:fragment9-13"
+  ],
+  "static_condition_independent_of_native_labels": true,
+  "status": "passed",
+  "torch_version": "2.7.1+cu126"
+}

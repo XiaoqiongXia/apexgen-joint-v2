@@ -1,0 +1,116 @@
+{
+  "dataset": ".",
+  "dataset_identity": {
+    "identity_sha256": "c599393e68ac7ac366363ce4235a62f7092dcb2cb86440641e2085e7e6feb1ab",
+    "manifest_sha256": "88c0c9bae53ab0ac372ece9bdd8aaa119ed982ae4aac2851853710ea84daa352",
+    "metadata_sha256": "c4a39223e5152ccdde4cbdbdba8facadc443eaf08a3e4628d5b4afaec72f0870",
+    "schema_version": "apexgen.joint_v2.dataset_identity.v2",
+    "shard_data_sha256": {
+      "shard-00000.lmdb": "328007a8d1217146d62039a94890db6e4041fef50acfd1405cc17376cd3e2df1",
+      "shard-00001.lmdb": "fda4c99717bdf3fd53fc3b269af0a31204c189d6f4ad9ca185b8a34a0db1f86e",
+      "shard-00002.lmdb": "45340deadffc92d720ba19a6e4b04204a5a58b72b402ec179565f1aecec26b96"
+    },
+    "storage": "unified_complex"
+  },
+  "export_kind": "closed_shard_subset",
+  "formal": false,
+  "loader_checked_indices": [
+    0,
+    8191,
+    8192,
+    16383,
+    16384,
+    24575
+  ],
+  "purpose": "overfitting and exploratory training; no independent validation split",
+  "retained_first_shard_sha256": "328007a8d1217146d62039a94890db6e4041fef50acfd1405cc17376cd3e2df1",
+  "samples": 24576,
+  "selected_shards": [
+    "shard-00000.lmdb",
+    "shard-00001.lmdb",
+    "shard-00002.lmdb"
+  ],
+  "source_build": "/data2/xiaoqiong/python_project/Datasets/apexgen-joint-v2-sequence-structure-codesign/artifacts/datasets/boltzgen_full_20260920/dataset.inprogress",
+  "source_progress_snapshot": {
+    "commit_size": 64,
+    "compression": "zlib",
+    "counts": {
+      "contact_runs": 20184886,
+      "directions_attempted": 2411120,
+      "fragments_attempted": 4260314,
+      "included": 3936398,
+      "pairs_attempted": 1205560,
+      "rejected": 323916,
+      "skipped_short": 15924572
+    },
+    "elapsed_seconds": 15382.2,
+    "final_output": "/data2/xiaoqiong/python_project/Datasets/apexgen-joint-v2-sequence-structure-codesign/artifacts/datasets/boltzgen_full_20260920/dataset",
+    "shard_size": 8192,
+    "status": "running",
+    "workers": 32
+  },
+  "sources": 422,
+  "split": "smoke",
+  "static_features_schema": "apexgen.joint_v2.static_features.v1",
+  "static_features_upgrade": {
+    "dataset_identity": {
+      "identity_sha256": "c599393e68ac7ac366363ce4235a62f7092dcb2cb86440641e2085e7e6feb1ab",
+      "manifest_sha256": "88c0c9bae53ab0ac372ece9bdd8aaa119ed982ae4aac2851853710ea84daa352",
+      "metadata_sha256": "c4a39223e5152ccdde4cbdbdba8facadc443eaf08a3e4628d5b4afaec72f0870",
+      "schema_version": "apexgen.joint_v2.dataset_identity.v2",
+      "shard_data_sha256": {
+        "shard-00000.lmdb": "328007a8d1217146d62039a94890db6e4041fef50acfd1405cc17376cd3e2df1",
+        "shard-00001.lmdb": "fda4c99717bdf3fd53fc3b269af0a31204c189d6f4ad9ca185b8a34a0db1f86e",
+        "shard-00002.lmdb": "45340deadffc92d720ba19a6e4b04204a5a58b72b402ec179565f1aecec26b96"
+      },
+      "storage": "unified_complex"
+    },
+    "new_shard_verification": {
+      "shard-00001.lmdb": {
+        "bytes_after": 151019520,
+        "bytes_before": 129200128,
+        "data_mdb_sha256": "fda4c99717bdf3fd53fc3b269af0a31204c189d6f4ad9ca185b8a34a0db1f86e",
+        "original_record_stream_sha256": "ecb47e9cd586a3d9b204ae3ce6f6edc8582fd489c58cf7dc4e868936f37b425f",
+        "original_sha256": "f909b34d5b1bde25a8b97492fbc66093fe13151ef08e1b87444c9e170a540ba6",
+        "records": 8192,
+        "shard_id": "shard-00001.lmdb"
+      },
+      "shard-00002.lmdb": {
+        "bytes_after": 145047552,
+        "bytes_before": 122904576,
+        "data_mdb_sha256": "45340deadffc92d720ba19a6e4b04204a5a58b72b402ec179565f1aecec26b96",
+        "original_record_stream_sha256": "f09811f0f177a05b9afd310e219a29da43eab7ba009f545ee844fb6eed8ddb61",
+        "original_sha256": "c45c2a2c276d2f2f57d0fe532b46ac56402f06fe5fbc332b4a5499be033afdd5",
+        "records": 8192,
+        "shard_id": "shard-00002.lmdb"
+      }
+    },
+    "records": 24576,
+    "retained_first_shard_sha256": "328007a8d1217146d62039a94890db6e4041fef50acfd1405cc17376cd3e2df1",
+    "schema_version": "apexgen.joint_v2.static_features.v1",
+    "shards": 3,
+    "source_caches": {
+      "shard-00000.lmdb": {
+        "cache_sha256": "5478d4110ba35c1308aad0f739e4a5f2c348629df6794d6c998d0aa09525fa30",
+        "original_sha256": "32f8c00a0bc9f21f4a290f10ff115e1c5c8ebd1a14707792b5e8ed06dba617c6",
+        "records": 8192,
+        "shard_id": "shard-00000.lmdb"
+      },
+      "shard-00001.lmdb": {
+        "cache_sha256": "0bfb61a047911151524d304bbd835af05a676fe347b53aec5c40eda8b8e7d47b",
+        "original_sha256": "f909b34d5b1bde25a8b97492fbc66093fe13151ef08e1b87444c9e170a540ba6",
+        "records": 8192,
+        "shard_id": "shard-00001.lmdb"
+      },
+      "shard-00002.lmdb": {
+        "cache_sha256": "1c92e96004abdb171d392e552a837f2c4cd005eb0d21fc38d962205ba19fa94f",
+        "original_sha256": "c45c2a2c276d2f2f57d0fe532b46ac56402f06fe5fbc332b4a5499be033afdd5",
+        "records": 8192,
+        "shard_id": "shard-00002.lmdb"
+      }
+    },
+    "status": "complete",
+    "validation": "Existing first shard preserved byte-for-byte; every added record and static cache verified before replacement; CSV and manifest prefix unchanged."
+  },
+  "status": "complete"
+}

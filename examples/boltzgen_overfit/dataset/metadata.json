@@ -1,0 +1,32 @@
+{
+  "formal": false,
+  "manifest_sha256": "88c0c9bae53ab0ac372ece9bdd8aaa119ed982ae4aac2851853710ea84daa352",
+  "preprocessing": {
+    "formal": false,
+    "mapping_sha256": "d0f203cdf90c48713fa25cdc1f3584f0ea1f378fc2726800be158d9c824f561d",
+    "minimum_target_length": 4,
+    "selection": "first closed shards; not a representative random split",
+    "split_policy": "preserve source smoke labels; no train/validation separation",
+    "static_features_schema": "apexgen.joint_v2.static_features.v1"
+  },
+  "preprocessing_config_sha256": "01f31f1812e4166d966850766fc1b30975a985412091379cabbed04bb414c569",
+  "record_compression": "zlib",
+  "record_count": 24576,
+  "record_schema_version": "apexgen.complex_record.joint_v2.v1",
+  "sample_inventory_sha256": "0098039995958bf05d545b10cf1a563c50aacefed93c6f58db6cbbe41719e957",
+  "schema_version": "apexgen.complex_dataset.joint_v2.v1",
+  "shards": [
+    {
+      "data_mdb_sha256": "328007a8d1217146d62039a94890db6e4041fef50acfd1405cc17376cd3e2df1",
+      "shard_id": "shard-00000.lmdb"
+    },
+    {
+      "data_mdb_sha256": "fda4c99717bdf3fd53fc3b269af0a31204c189d6f4ad9ca185b8a34a0db1f86e",
+      "shard_id": "shard-00001.lmdb"
+    },
+    {
+      "data_mdb_sha256": "45340deadffc92d720ba19a6e4b04204a5a58b72b402ec179565f1aecec26b96",
+      "shard_id": "shard-00002.lmdb"
+    }
+  ]
+}

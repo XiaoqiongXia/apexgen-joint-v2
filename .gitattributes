@@ -8,6 +8,6 @@ examples/boltzgen24576/dataset/sources/*.npz filter=lfs diff=lfs merge=lfs -text
 examples/boltzgen24576/dataset/sample_inventory.csv whitespace=cr-at-eol
 
 # Precomputed pocket/peptide feature example.
-examples/boltzgen8192_static/dataset/shards/**/data.mdb filter=lfs diff=lfs merge=lfs -text
-examples/boltzgen8192_static/dataset/sources/*.npz filter=lfs diff=lfs merge=lfs -text
-examples/boltzgen8192_static/dataset/sample_inventory.csv whitespace=cr-at-eol
+examples/boltzgen_overfit/dataset/shards/**/data.mdb filter=lfs diff=lfs merge=lfs -text
+examples/boltzgen_overfit/dataset/sources/*.npz filter=lfs diff=lfs merge=lfs -text
+examples/boltzgen_overfit/dataset/sample_inventory.csv whitespace=cr-at-eol
