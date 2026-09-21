@@ -14,6 +14,7 @@ import pyarrow.parquet as pq
 import yaml
 
 from apexgen.shared.storage.store import pack_record
+from apexgen.joint_v2.data.static_features import precompute_record, STATIC_FEATURES_SCHEMA
 from apexgen.joint_v2.contracts.contract import JOINT_V2_CONTRACT_SHA256
 from apexgen.joint_v2.data.dataset import COMPLEX_RECORD_SCHEMA, COMPLEX_DATASET_SCHEMA
 from apexgen.joint_v2.runtime.lineage import canonical_sha256, joint_v2_dataset_identity, sha256_file
@@ -148,6 +149,7 @@ def build_dataset(rows, output: str | Path, *, parameters=None, shard_size=1000)
                 )
             record["complex_schema_version"] = COMPLEX_RECORD_SCHEMA
             record["joint_v2_target"] = geometry
+            precompute_record(record)
             _put(pocket_env, row["sample_id"], pack_record(record))
             entry = dict(
                 schema_version="apexgen.manifest.v0",
@@ -175,6 +177,7 @@ def build_dataset(rows, output: str | Path, *, parameters=None, shard_size=1000)
         )
         pq.write_table(pa.Table.from_pylist(manifest), pocket / "manifest.parquet")
         policy = dict(
+            static_features_schema=STATIC_FEATURES_SCHEMA,
             schema="apexgen.joint_v2.native_pdb_preprocessing.v4",
             **asdict(parameters),
             core="native peptide/receptor heavy atom distance <= cutoff",

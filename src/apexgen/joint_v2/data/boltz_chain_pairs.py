@@ -5,6 +5,7 @@ never the envelope of several runs and never concatenated pieces. The
 existing strict NPZ adapter owns chemistry, observed backbone and mapping QC.
 """
 
+from contextlib import nullcontext
 import hashlib
 from pathlib import Path
 
@@ -52,7 +53,7 @@ def fragment_selections(pair, direction):
         for index, (start, stop) in enumerate(runs)]
 
 
-def adapt_interface_direction(path, pair, direction, *, fragment_index=0, split="smoke"):
+def adapt_interface_direction(path, pair, direction, *, fragment_index=0, split="smoke", source=None):
     """Return a record and independent atom-identity audit; reject rather than trim.
 
 The source interface selects the binding site. Conditions use the adapter's
@@ -63,9 +64,13 @@ Both directions must use the same externally assigned source-structure split.
 """
     if direction not in DIRECTIONS:
         raise ValueError(f"unsupported direction: {direction}")
-    payload = Path(path).read_bytes()
-    if (len(payload) != pair["source_size"]
-            or hashlib.sha256(payload).hexdigest() != pair["source_npz_sha256"]):
+    if source is None:
+        payload = Path(path).read_bytes()
+        size, digest = len(payload), hashlib.sha256(payload).hexdigest()
+    else:
+        source.check_path(path)
+        size, digest = source.size, source.sha256
+    if size != pair["source_size"] or digest != pair["source_npz_sha256"]:
         raise ValueError("interface inventory/source NPZ identity mismatch")
     if not pair["contact_verified"] or pair["contact_cutoff_angstrom"] != 5.0:
         raise ValueError("requires a verified 5-A interface inventory")
@@ -75,17 +80,17 @@ Both directions must use the same externally assigned source-structure split.
                    f"-chain{pair['chain_b_row']}")
     if pair["pair_id"] != expected_id:
         raise ValueError("pair ID disagrees with source chain rows")
-    with np.load(path, allow_pickle=False) as data:
+    with (np.load(path, allow_pickle=False) if source is None else nullcontext(source.data)) as data:
         for side in ("a", "b"):
             prefix = f"chain_{side}_"
             index = pair[prefix + "row"]
             if not 0 <= index < len(data["chains"]):
                 raise ValueError("inventory chain row out of bounds")
             chain = data["chains"][index]
-            for dest, source in (("id", "name"), ("length", "res_num"),
+            for dest, source_field in (("id", "name"), ("length", "res_num"),
                                  ("residue_table_start", "res_idx"), ("asym_id", "asym_id"),
                                  ("entity_id", "entity_id"), ("sym_id", "sym_id")):
-                if pair[prefix + dest] != chain[source]:
+                if pair[prefix + dest] != chain[source_field]:
                     raise ValueError(f"inventory chain identity mismatch: {prefix + dest}")
             rows = pair[prefix + "interface_residue_rows"]
             start, count = int(chain["res_idx"]), int(chain["res_num"])
@@ -107,7 +112,7 @@ Both directions must use the same externally assigned source-structure split.
     record = adapt_boltz_npz(path, sample_id=sample_id,
         source_pdb_id=pair["source_structure_id"], receptor_chain_ids=(condition_id,),
         peptide_chain_id=target_id, split=split, parameters=PocketParameters(),
-        target_residue_range=(lo, hi))
+        target_residue_range=(lo, hi), source=source)
     length = hi - lo
     start = pair[f"chain_{target_side}_residue_table_start"] + lo
     keys = record["peptide_residue_keys"]
@@ -138,7 +143,7 @@ Both directions must use the same externally assigned source-structure split.
         all_target_interface_residue_rows=pair[f"chain_{target_side}_interface_residue_rows"],
         source_archive=pair["source_archive"], source_member=pair["source_member"],
         source_offset=pair["source_offset"], source_size=pair["source_size"])
-    audit = audit_boltz_record(record)
+    audit = audit_boltz_record(record, source=source)
     audit.update(record["interface_pair"])
     audit["nearby_excluded_atom_count"] = len(record["boltz_adapter"]["nearby_excluded_atom_rows"])
     return record, audit

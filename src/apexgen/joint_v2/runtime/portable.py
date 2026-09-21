@@ -18,6 +18,7 @@ from apexgen.joint_v2.contracts.state import JointFlowState
 from apexgen.joint_v2.contracts.task_contract import TaskObservation
 from apexgen.joint_v2.data.batch import collate_joint_v2_records
 from apexgen.joint_v2.data.dataset import JointV2Dataset
+from apexgen.joint_v2.data.training_collate import prepare_training_collator
 from apexgen.joint_v2.evaluation.generation_quality import generation_metrics
 from apexgen.joint_v2.geometry.reconstruction import reconstruct_backbone
 from apexgen.joint_v2.geometry.rotations import so3_log
@@ -156,6 +157,8 @@ def train(args):
         if not len(dataset):
             raise ValueError("training split is empty")
         identity = joint_v2_dataset_identity(args.dataset)
+        training_collator = prepare_training_collator(dataset, verified_identity=identity,
+            geometry_checks=getattr(args, "geometry_checks", "auto"))
         model = build_model(config, device)
         optimizer = torch.optim.AdamW(
             [p for p in model.parameters() if p.requires_grad],
@@ -185,6 +188,7 @@ def train(args):
         write_json(output / "run.json", dict(
             schema=SCHEMA, formal=False, config=config, runtime_contract=CONTRACT,
             dataset_identity=identity, split=args.split, samples=len(dataset),
+            input_validation=training_collator.report,
             total_steps=steps, start_step=start, device=str(device),
             python=platform.python_version(), torch=str(torch.__version__),
             parameters=sum(p.numel() for p in model.parameters()),
@@ -195,7 +199,7 @@ def train(args):
         model.train()
         with (output / "training.jsonl").open("w", buffering=1) as log:
             for step, indices in training_batches(len(dataset), options["batch_size"], options["seed"], start, steps):
-                batch = collate_joint_v2_records([dataset[i] for i in indices]).to(device)
+                batch = training_collator([dataset[i] for i in indices]).to(device)
                 optimizer.zero_grad(set_to_none=True)
                 losses = simplex_fm_losses(model, batch, generator, alpha_max=options["alpha_max"],
                                           precision=options["precision"], weights=weights)
@@ -328,6 +332,8 @@ def main():
     training = commands.add_parser("train", help="minibatch training or exact-state continuation")
     training.add_argument("--config", required=True, type=Path)
     training.add_argument("--resume", type=Path)
+    training.add_argument("--geometry-checks", choices=("auto", "full"), default="auto",
+                          help="auto uses light collation after verified static-data preflight; full enables per-batch checks")
     training.add_argument("--steps", type=int, help="total step budget, including resumed steps")
     for name in ("evaluate", "sample"):
         sub = commands.add_parser(name)

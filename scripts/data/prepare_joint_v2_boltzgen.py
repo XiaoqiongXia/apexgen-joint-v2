@@ -65,7 +65,8 @@ def write_sample_inventory(dataset_dir, inventory, output):
     return dict(csv=csv_path.name, markdown=md_path.name, samples=len(rows))
 
 
-def prepare_selected(structures_dir, structure_ids, output, *, model_config=None, min_free_gib=20):
+def prepare_selected(structures_dir, structure_ids, output, *, model_config=None, min_free_gib=20,
+                     shard_size=8192, workers=1, commit_size=1, compression=None):
     structures_dir, output = Path(structures_dir).resolve(), Path(output).resolve()
     if (not structure_ids or len(set(structure_ids)) != len(structure_ids)
             or any(not isinstance(sid, str) or not sid.isascii() or not sid.isalnum()
@@ -124,7 +125,8 @@ def prepare_selected(structures_dir, structure_ids, output, *, model_config=None
         raise ValueError("selected structures contain no stored protein interface pairs")
     dataset_dir = output / "dataset"
     progress('dataset', len(paths), interface_pairs=pair_count)
-    summary = build_dataset(inventory, dataset_dir, min_fragment_length=4, min_free_gib=min_free_gib)
+    summary = build_dataset(inventory, dataset_dir, min_fragment_length=4, min_free_gib=min_free_gib,
+        shard_size=shard_size, workers=workers, commit_size=commit_size, compression=compression)
     result = dict(structure_ids=list(structure_ids), source_storage="standalone_npz",
         sources_checked=len(paths), source_audits="source_audits.json", dataset=str(dataset_dir),
         dataset_summary=summary)
@@ -162,6 +164,11 @@ def main():
         help="explicitly process every *.npz in structures-dir")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--model-smoke", action="store_true")
+    parser.add_argument("--commit-size", type=int, default=64)
+    parser.add_argument("--compression", choices=["none", "zlib"], default="zlib")
+    parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--shard-size", type=int, default=8192,
+        help="maximum samples per LMDB shard (default: 8192)")
     parser.add_argument("--min-free-gib", type=int, default=20,
         help="stop and retain partial products when free disk space falls below this reserve")
     parser.add_argument("--config", type=Path, default=Path(__file__).resolve().parents[2]
@@ -169,11 +176,14 @@ def main():
     args = parser.parse_args()
     if args.min_free_gib < 0:
         parser.error('--min-free-gib must be nonnegative')
+    if args.shard_size < 1:
+        parser.error('--shard-size must be positive')
     ids = (sorted(p.stem for p in args.structures_dir.glob('*.npz') if p.is_file())
            if args.all_structures else args.structure_ids)
     print(json.dumps(prepare_selected(args.structures_dir, ids, args.output,
         model_config=args.config if args.model_smoke else None,
-        min_free_gib=args.min_free_gib), indent=2))
+        min_free_gib=args.min_free_gib, shard_size=args.shard_size, workers=args.workers, commit_size=args.commit_size,
+        compression=None if args.compression == "none" else args.compression), indent=2))
 
 
 if __name__ == "__main__":

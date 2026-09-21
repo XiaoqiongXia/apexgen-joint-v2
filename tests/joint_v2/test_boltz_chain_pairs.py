@@ -351,3 +351,31 @@ def test_csv_write_failure_never_publishes_lmdb_as_complete(tmp_path, monkeypatc
     with builder.lmdb.open(str(stage/'shards/shard-00000.lmdb'), readonly=True, lock=False) as env:
         with env.begin() as txn:
             assert txn.stat()['entries'] == 1
+
+
+def test_large_shard_map_growth_preserves_records_and_rejects_duplicates(tmp_path):
+    from scripts.data import prepare_joint_v2_boltz_chain_pairs as builder
+    with builder.lmdb.open(str(tmp_path/'large.lmdb'), map_size=32768) as env:
+        builder._put_sample(env, b'first', b'a' * 1000)
+        builder._put_sample(env, b'second', b'b' * 200000)
+        assert env.info()['map_size'] > 32768
+        with env.begin() as txn:
+            assert txn.get(b'first') == b'a' * 1000
+            assert txn.get(b'second') == b'b' * 200000
+            assert txn.stat()['entries'] == 2
+        with pytest.raises(ValueError, match='duplicate directed sample'):
+            builder._put_sample(env, b'first', b'changed')
+        with env.begin() as txn:
+            assert txn.get(b'first') == b'a' * 1000
+
+
+def test_batch_map_growth_and_duplicate_rollback(tmp_path):
+    from scripts.data import prepare_joint_v2_boltz_chain_pairs as builder
+    with builder.lmdb.open(str(tmp_path/'batch.lmdb'), map_size=32768) as env:
+        builder._put_samples(env, [(b'a', b'x'*100000), (b'b', b'y'*100000)])
+        with pytest.raises(ValueError, match='duplicate directed sample'):
+            builder._put_samples(env, [(b'c', b'z'), (b'a', b'changed')])
+        with env.begin() as txn:
+            assert txn.stat()['entries'] == 2
+            assert txn.get(b'c') is None
+            assert txn.get(b'a') == b'x'*100000

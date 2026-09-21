@@ -15,9 +15,11 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from scipy.spatial import cKDTree
 
 from apexgen.joint_v2.contracts.contract import JOINT_V2_CONTRACT_SHA256
-from apexgen.joint_v2.data.batch import POCKET_ATOM_NAMES, collate_joint_v2_records
+from apexgen.joint_v2.data.batch import POCKET_ATOM_NAMES
+from apexgen.joint_v2.data.static_features import precompute_record
 from apexgen.joint_v2.data.boltz_schema import decode_atom_name
 from apexgen.joint_v2.data.dataset import COMPLEX_RECORD_SCHEMA, NATIVE_TARGET_SCHEMA
 from apexgen.joint_v2.data.native_targets import observed_backbone_frames
@@ -132,31 +134,7 @@ def _key(residue, chains, residue_row, chain_row):
                 boltz_residue_row=residue_row)
 
 
-def adapt_boltz_npz(
-    path, *, sample_id, source_pdb_id, receptor_chain_ids, peptide_chain_id,
-    split="smoke", parameters=None, target_residue_range=None,
-):
-    """Create an embedded-label record accepted by collate_joint_v2_records.
-
-    Receptor residues without N/CA/C are omitted with provenance; their original
-    polymer positions still prevent false adjacency. The generated region must
-    be complete and continuous. By default this is the entire source chain;
-    target_residue_range=(start, stop) selects a contiguous zero-based, half-open
-    polymer interval, retaining every residue between its endpoints.
-    Only single-model NPZs are accepted because the format
-    does not provide independent atom-presence masks for each ensemble member.
-    """
-    parameters = parameters or PocketParameters()
-    if not all(isinstance(v, str) and v for v in (sample_id, source_pdb_id, split, peptide_chain_id)):
-        raise ValueError("sample/source/split/peptide identities must be nonempty strings")
-    if isinstance(receptor_chain_ids, str):
-        raise ValueError("receptor_chain_ids must be a sequence of exact chain names")
-    roles = tuple(receptor_chain_ids)
-    if not roles or len(set(roles)) != len(roles) or peptide_chain_id in roles:
-        raise ValueError("receptor roles must be unique and disjoint from peptide")
-    path = Path(path).resolve()
-    with np.load(path, allow_pickle=False) as archive:
-        data = {key: archive[key] for key in archive.files}
+def _validated_tables(data):
     atoms = _table(data, "atoms", dict(name="iuU", coords="f", is_present="b"))
     native_names = atoms["name"].dtype.kind == "U"
     source_schema = "boltzgen_string_names" if native_names else "boltz_integer_names"
@@ -195,6 +173,44 @@ def adapt_boltz_npz(
     else:
         connections = _table(data, "connections", endpoint_fields)
         bonds = _table(data, "bonds", dict(atom_1="iu", atom_2="iu", type="iu"))
+    return atoms, residues, chains, chain_mask, native_names, source_schema, endpoint_fields, bonds, connections
+
+
+def adapt_boltz_npz(
+    path, *, sample_id, source_pdb_id, receptor_chain_ids, peptide_chain_id,
+    split="smoke", parameters=None, target_residue_range=None, source=None,
+):
+    """Create an embedded-label record accepted by collate_joint_v2_records.
+
+    Receptor residues without N/CA/C are omitted with provenance; their original
+    polymer positions still prevent false adjacency. The generated region must
+    be complete and continuous. By default this is the entire source chain;
+    target_residue_range=(start, stop) selects a contiguous zero-based, half-open
+    polymer interval, retaining every residue between its endpoints.
+    Only single-model NPZs are accepted because the format
+    does not provide independent atom-presence masks for each ensemble member.
+    """
+    parameters = parameters or PocketParameters()
+    if not all(isinstance(v, str) and v for v in (sample_id, source_pdb_id, split, peptide_chain_id)):
+        raise ValueError("sample/source/split/peptide identities must be nonempty strings")
+    if isinstance(receptor_chain_ids, str):
+        raise ValueError("receptor_chain_ids must be a sequence of exact chain names")
+    roles = tuple(receptor_chain_ids)
+    if not roles or len(set(roles)) != len(roles) or peptide_chain_id in roles:
+        raise ValueError("receptor roles must be unique and disjoint from peptide")
+    path = Path(path).resolve()
+    if source is None:
+        with np.load(path, allow_pickle=False) as archive:
+            data = {key: archive[key] for key in archive.files}
+    else:
+        source.check_path(path)
+        data = source.data
+    validated = source.memo.get('validated_tables') if source is not None else None
+    if validated is None:
+        validated = _validated_tables(data)
+        if source is not None:
+            source.memo['validated_tables'] = validated
+    atoms, residues, chains, chain_mask, native_names, source_schema, endpoint_fields, bonds, connections = validated
     selected = {}
     for name in (*roles, peptide_chain_id):
         hits = np.flatnonzero(chains["name"] == name)
@@ -228,6 +244,20 @@ def adapt_boltz_npz(
     peptide_source_atoms = {}
     used_atoms, used_residues = set(), set()
     for chain_name, ci in selected.items():
+        cache_key = ('receptor', ci)
+        cached = source.memo.get(cache_key) if source is not None and chain_name != peptide_chain_id else None
+        if cached is not None:
+            saved_residues, saved_keys, saved_omitted, saved_atoms, saved_rows = cached
+            if used_atoms.intersection(saved_atoms) or used_residues.intersection(saved_rows):
+                raise ValueError("overlapping residue span or duplicate atom identity")
+            receptor.extend(saved_residues)
+            provenance.update(saved_keys)
+            omitted.extend(saved_omitted)
+            used_atoms.update(saved_atoms)
+            used_residues.update(saved_rows)
+            continue
+        before_receptor, before_omitted = len(receptor), len(omitted)
+        before_atoms, before_rows = used_atoms.copy(), used_residues.copy()
         chain = chains[ci]
         crange = _range(chain["atom_idx"], chain["atom_num"], len(atoms), "chain atom")
         rrange = _range(chain["res_idx"], chain["res_num"], len(residues), "chain residue")
@@ -280,6 +310,10 @@ def adapt_boltz_npz(
             (peptide if chain_name == peptide_chain_id else receptor).append(residue)
         if expected_atom != crange.stop:
             raise ValueError("residue atoms do not exhaust their chain span")
+        if source is not None and chain_name != peptide_chain_id:
+            saved = receptor[before_receptor:]
+            source.memo[cache_key] = (saved, {id(r): provenance[id(r)] for r in saved},
+                omitted[before_omitted:], used_atoms - before_atoms, used_residues - before_rows)
     if not peptide or not receptor:
         raise ValueError("empty peptide or observed receptor")
     links, breaks = backbone_links(peptide, parameters.geometry)
@@ -343,19 +377,40 @@ def adapt_boltz_npz(
             raise ValueError("possible cyclic peptide is outside the linear peptide contract")
 
     peptide_xyz = np.asarray([a.xyz for r in peptide for a in r.atoms])
-    core = np.asarray([np.any(np.linalg.norm(np.asarray([a.xyz for a in r.atoms])[:, None]
-                         - peptide_xyz[None], axis=-1) <= parameters.core_cutoff_angstrom)
-                       for r in receptor])
+    receptor_geometry_key = ('receptor_geometry', tuple(selected[n] for n in roles))
+    receptor_geometry = source.memo.get(receptor_geometry_key) if source is not None else None
+    if source is not None and receptor_geometry is None:
+        receptor_geometry = (np.asarray([a.xyz for r in receptor for a in r.atoms]),
+            np.cumsum([0] + [len(r.atoms) for r in receptor])[:-1],
+            np.stack([_cb(r) for r in receptor]))
+        source.memo[receptor_geometry_key] = receptor_geometry
+    if source is None:
+        core = np.asarray([np.any(np.linalg.norm(np.asarray([a.xyz for a in r.atoms])[:, None]
+                             - peptide_xyz[None], axis=-1) <= parameters.core_cutoff_angstrom)
+                           for r in receptor])
+    else:
+        peptide_tree = cKDTree(peptide_xyz)
+        receptor_xyz, starts, _ = receptor_geometry
+        nearest = peptide_tree.query(receptor_xyz, workers=1)[1]
+        touches = np.linalg.norm(receptor_xyz - peptide_xyz[nearest], axis=-1) <= parameters.core_cutoff_angstrom
+        core = np.logical_or.reduceat(touches, starts)
     if not core.any():
         raise ValueError("selected receptor has no peptide contact within core cutoff")
-    cb = np.stack([_cb(r) for r in receptor])
+    cb = (receptor_geometry[2] if receptor_geometry is not None else np.stack([_cb(r) for r in receptor]))
     distances = np.linalg.norm(cb[:, None] - cb[core][None], axis=-1).min(axis=1)
     keep = core | (distances <= parameters.context_radius_angstrom)
     origin = np.stack([_xyz(r, "CA") for r, yes in zip(receptor, core) if yes]).mean(axis=0)
     pocket = [r for r, yes in zip(receptor, keep) if yes]
+    receptor_ids = {id(r) for r in receptor}
     for r in [*pocket, *peptide]:
-        validate_elements(r)
-        chirality.append(dict(key=provenance[id(r)], status=validate_residue_geometry(r, parameters.geometry)))
+        geometry_key = ('geometry', id(r), parameters.geometry)
+        status = source.memo.get(geometry_key) if source is not None and id(r) in receptor_ids else None
+        if status is None:
+            validate_elements(r)
+            status = validate_residue_geometry(r, parameters.geometry)
+            if source is not None and id(r) in receptor_ids:
+                source.memo[geometry_key] = status
+        chirality.append(dict(key=provenance[id(r)], status=status))
     pocket_links, pocket_breaks = backbone_links(pocket, parameters.geometry)
     validate_link_angles(pocket, pocket_links, parameters.geometry)
 
@@ -392,16 +447,34 @@ def adapt_boltz_npz(
     # Explicitly disclose other nearby source atoms that are outside the model.
     represented = set(p_indices[p_indices >= 0].tolist()) | peptide_atoms
     nearby_excluded = []
-    for start in range(0, len(atoms), 1024):
-        rows = np.arange(start, min(start + 1024, len(atoms)))
-        rows = rows[atoms["is_present"][rows]]
-        near = np.any(np.linalg.norm(atoms["coords"][rows, None].astype(np.float64)
-                                    - peptide_xyz[None], axis=-1) <= parameters.environment_radius_angstrom, axis=1)
-        nearby_excluded.extend(int(i) for i in rows[near] if int(i) not in represented)
+    if source is None:
+        for start in range(0, len(atoms), 1024):
+            rows = np.arange(start, min(start + 1024, len(atoms)))
+            rows = rows[atoms["is_present"][rows]]
+            near = np.any(np.linalg.norm(atoms["coords"][rows, None].astype(np.float64)
+                                        - peptide_xyz[None], axis=-1) <= parameters.environment_radius_angstrom, axis=1)
+            nearby_excluded.extend(int(i) for i in rows[near] if int(i) not in represented)
+    else:
+        spatial = source.memo.get('observed_atom_tree')
+        if spatial is None:
+            observed_rows = np.flatnonzero(atoms['is_present'])
+            observed_xyz = atoms['coords'][observed_rows].astype(np.float64)
+            spatial = (observed_rows, observed_xyz, cKDTree(observed_xyz))
+            source.memo['observed_atom_tree'] = spatial
+        observed_rows, observed_xyz, tree = spatial
+        groups = tree.query_ball_point(peptide_xyz,
+            np.nextafter(parameters.environment_radius_angstrom, np.inf), workers=1)
+        candidate = sorted({i for group in groups for i in group})
+        if candidate:
+            candidate = np.asarray(candidate)
+            nearest = peptide_tree.query(observed_xyz[candidate], workers=1)[1]
+            near = np.linalg.norm(observed_xyz[candidate] - peptide_xyz[nearest], axis=-1) <= parameters.environment_radius_angstrom
+            nearby_excluded = [int(i) for i in observed_rows[candidate[near]] if int(i) not in represented]
     record = dict(schema_version=RECORD_SCHEMA_VERSION, complex_schema_version=COMPLEX_RECORD_SCHEMA,
         sample_id=sample_id, source_pdb_id=source_pdb_id, split=split, peptide_length=len(peptide),
         receptor_chain_id=",".join(roles), receptor_chain_ids=list(roles), peptide_chain_id=peptide_chain_id,
-        raw_path=str(path), raw_file_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+        raw_path=str(path), raw_file_sha256=(source.sha256 if source is not None
+            else hashlib.sha256(path.read_bytes()).hexdigest()),
         site_origin=origin, selected_model_index=0, preprocessing_parameters=asdict(parameters),
         pocket_residue_keys=[provenance[id(r)] for r in pocket],
         peptide_residue_keys=[provenance[id(r)] for r in peptide],
@@ -426,15 +499,20 @@ def adapt_boltz_npz(
                                "chain roles are supplied, not inferred biological binder annotations"]),
         structure_quality=dict(pocket_backbone_breaks=pocket_breaks, chirality=chirality,
             warnings=(["nearby_full_structure_environment_not_in_condition"] if nearby_excluded else [])))
-    collate_joint_v2_records([record])
-    return record
+    return precompute_record(record)
 
 
-def audit_boltz_record(record):
+def audit_boltz_record(record, *, source=None):
     """Independently round-trip every represented residue/atom to the source NPZ."""
-    with np.load(record["raw_path"], allow_pickle=False) as source:
-        atoms, residues, chains = source["atoms"], source["residues"], source["chains"]
-    if hashlib.sha256(Path(record["raw_path"]).read_bytes()).hexdigest() != record["raw_file_sha256"]:
+    if source is None:
+        with np.load(record["raw_path"], allow_pickle=False) as archive:
+            atoms, residues, chains = archive["atoms"], archive["residues"], archive["chains"]
+        digest = hashlib.sha256(Path(record["raw_path"]).read_bytes()).hexdigest()
+    else:
+        source.check_path(record["raw_path"])
+        atoms, residues, chains = (source.data[key] for key in ("atoms", "residues", "chains"))
+        digest = source.sha256
+    if digest != record["raw_file_sha256"]:
         raise ValueError("source NPZ changed after adaptation")
     if record["boltz_adapter"]["mapping_sha256"] != mapping_manifest()["mapping_sha256"]:
         raise ValueError("mapping contract changed after adaptation")

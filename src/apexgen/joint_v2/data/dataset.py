@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from pathlib import Path
 from typing import Any
@@ -23,7 +24,7 @@ class JointV2Dataset(Dataset[dict[str, Any]]):
 
     New usage: JointV2Dataset(dataset_root, split="train").
     Both formats expose the same record to collate_joint_v2_records, which
-    derives native frames from observed coordinates.
+    reads cached observed-atom features, with a legacy geometry fallback.
     """
 
     def __init__(
@@ -32,6 +33,14 @@ class JointV2Dataset(Dataset[dict[str, Any]]):
         target_root: str | Path | None = None,
         split: str = "train",
     ) -> None:
+        from apexgen.joint_v2.data.static_features import UPGRADE_MARKER, STATIC_FEATURES_SCHEMA
+        if (Path(pocket_root) / UPGRADE_MARKER).exists():
+            raise RuntimeError("dataset static feature upgrade is incomplete; wait for publication")
+        metadata_path = Path(pocket_root) / "metadata.json"
+        metadata = json.loads(metadata_path.read_text()) if metadata_path.exists() else {}
+        self._static_features_schema = metadata.get("preprocessing", {}).get("static_features_schema")
+        if self._static_features_schema not in (None, STATIC_FEATURES_SCHEMA):
+            raise ValueError("unsupported dataset static feature schema")
         self.pockets = ApexGenDataset(pocket_root, split)
         self.target_root = Path(target_root) if target_root is not None else None
         self._target_environment = None
@@ -68,6 +77,11 @@ class JointV2Dataset(Dataset[dict[str, Any]]):
 
     def __getitem__(self, index: int) -> dict[str, Any]:
         record = self.pockets[index]
+        if self._static_features_schema is not None:
+            from apexgen.joint_v2.data.static_features import STATIC_FEATURES_KEY
+            cache = record.get(STATIC_FEATURES_KEY)
+            if not isinstance(cache, dict) or cache.get("schema_version") != self._static_features_schema:
+                raise ValueError("dataset declares static features but record cache is missing or incompatible")
         if self.target_root is None:
             if record.get("complex_schema_version") != COMPLEX_RECORD_SCHEMA:
                 raise ValueError(

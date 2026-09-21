@@ -29,6 +29,7 @@ import torch
 
 from apexgen.joint_v2.data.boltz_npz import adapt_boltz_npz, audit_boltz_record, mapping_manifest
 from apexgen.joint_v2.data.batch import collate_joint_v2_records
+from apexgen.joint_v2.data.static_features import STATIC_FEATURES_SCHEMA, STATIC_FEATURES_KEY
 from apexgen.joint_v2.data.dataset import COMPLEX_DATASET_SCHEMA, COMPLEX_RECORD_SCHEMA, JointV2Dataset
 from apexgen.joint_v2.runtime.lineage import canonical_sha256, joint_v2_dataset_identity, sha256_file
 from apexgen.shared.storage.store import pack_record
@@ -81,7 +82,7 @@ def build_panel(rows, output):
         pq.write_table(pa.Table.from_pylist(manifest), stage / "manifest.parquet")
         mappings = mapping_manifest()
         write_json(stage / "mapping.json", mappings)
-        policy = dict(adapter=mappings["schema"], mapping_sha256=mappings["mapping_sha256"],
+        policy = dict(static_features_schema=STATIC_FEATURES_SCHEMA, adapter=mappings["schema"], mapping_sha256=mappings["mapping_sha256"],
             core_cutoff_angstrom=5.0, context_radius_angstrom=11.0,
             site_selection="native interface crop; inference requires a supplied target site",
             coordinate_system="subtract core CA centroid; observed atoms only",
@@ -128,6 +129,7 @@ def smoke_model(output, config_path, *, record_indices=None, report_name="model_
     # conditions; the supervised noisy training state intentionally uses labels.
     changed = deepcopy(records)
     for record in changed:
+        record.pop(STATIC_FEATURES_KEY, None)  # Deliberately edited labels require rebuilding.
         target = record["joint_v2_target"]
         target["experimental_atom14"][target["experimental_atom14_mask"]] += 19.0
         target["aatype"] = (target["aatype"] + 7) % 20

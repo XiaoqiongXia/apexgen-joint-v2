@@ -166,6 +166,8 @@ def test_old_schema_and_batch_padding_and_lmdb_serialization(tmp_path):
                 "pocket_residue_rotation", "pocket_core_mask", "pocket_residue_keys"):
         smaller[key] = smaller[key][:1]
     smaller["pocket_backbone_link_mask"] = np.zeros(0, dtype=bool)
+    from apexgen.joint_v2.data.static_features import precompute_record
+    precompute_record(smaller)  # Re-cropping invalidates the original cache.
     batch = collate_joint_v2_records([restored, smaller])
     assert batch.condition.residue_mask.tolist() == [[True, True, True], [True, True, False]]
     assert batch.condition.chain_index[1, :2].tolist() == [0, 1]

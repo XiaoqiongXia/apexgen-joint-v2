@@ -11,7 +11,7 @@ import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 
-from apexgen.joint_v2.data.batch import collate_joint_v2_records
+from apexgen.joint_v2.data.training_collate import prepare_training_collator
 from apexgen.joint_v2.data.dataset import JointV2Dataset
 from apexgen.joint_v2.runtime.distributed import global_mean_loss, model_digest
 from apexgen.joint_v2.runtime.lineage import joint_v2_dataset_identity, sha256_file
@@ -53,6 +53,8 @@ def train(args):
         count = len(dataset)
         validate_batch_layout(count, options['batch_size'], world)
         identity = joint_v2_dataset_identity(args.dataset)
+        training_collator = prepare_training_collator(dataset, verified_identity=identity,
+            geometry_checks=getattr(args, 'geometry_checks', 'auto'))
         torch.manual_seed(options['seed'])
         model = build_model(config, device)
         ddp = DistributedDataParallel(model, device_ids=[device.index], find_unused_parameters=True)
@@ -85,6 +87,7 @@ def train(args):
                 output.mkdir(parents=True, exist_ok=False)
                 write_json(output / 'run.json', dict(schema=SCHEMA, mode=MODE, formal=False,
                     config=config, runtime_contract=CONTRACT, dataset_identity=identity,
+                    input_validation=training_collator.report,
                     split=args.split, samples=count, total_steps=steps, start_step=start,
                     world_size=world, global_batch_size=options['batch_size'],
                     batches_per_epoch=math.ceil(count/options['batch_size']),
@@ -141,7 +144,7 @@ def train(args):
         try:
             for index, indices in training_batches(count, options['batch_size'], options['seed'], start, steps):
                 local = rank_indices(indices, rank, world)
-                batch = collate_joint_v2_records([dataset[i] for i in local]).to(device)
+                batch = training_collator([dataset[i] for i in local]).to(device)
                 optimizer.zero_grad(set_to_none=True)
                 losses = simplex_fm_losses(ddp, batch, generator, alpha_max=options['alpha_max'],
                                           precision=options['precision'], weights=weights)
@@ -189,6 +192,8 @@ def main():
     parser.add_argument('--steps',type=int)
     parser.add_argument('--resume',type=Path)
     parser.add_argument('--cpu-threads',type=int,default=2)
+    parser.add_argument('--geometry-checks', choices=('auto', 'full'), default='auto',
+                        help='auto uses verified static features; full enables per-batch geometry checks')
     train(parser.parse_args())
 
 

@@ -15,6 +15,7 @@ from apexgen.shared.geometry.torsion import extract_backbone_torsions
 from apexgen.joint_v2.contracts.contract import PeptideNativeTargets, UnifiedComplexCondition
 from apexgen.joint_v2.geometry.rotations import canonicalize_masked_angles
 from apexgen.joint_v2.data.native_targets import observed_backbone_frames
+from apexgen.joint_v2.data.static_features import read_static_features
 from apexgen.joint_v2.contracts.state import (
     BACKBONE_ANGLE_SLOTS,
     POCKET_ATOM_SLOTS,
@@ -276,6 +277,7 @@ def collate_joint_v2_records(records: list[dict[str, Any]]) -> JointV2Batch:
         target = record.get("joint_v2_target")
         if not isinstance(target, dict):
             raise ValueError("record is missing its Joint-v2 geometry target")
+        cached = read_static_features(record)
         p = slice(0, pocket_length)
         q = slice(pocket_length, pocket_length + peptide_length)
 
@@ -294,8 +296,15 @@ def collate_joint_v2_records(records: list[dict[str, Any]]) -> JointV2Batch:
         if p_xyz.shape != (pocket_length, POCKET_ATOM_SLOTS, 3):
             raise ValueError("Joint-v2 requires 38-slot pocket atom records")
         p_xyz = torch.where(p_atom_mask[..., None], p_xyz, 0.0)
-        p_sequence, p_chain, p_adjacent = _residue_topology(record, pocket_length)
-        p_bb, p_bb_mask, p_sc, p_sc_mask = _pocket_angles(p_aatype, p_xyz, p_atom_mask, p_adjacent)
+        if cached is None:
+            p_sequence, p_chain, p_adjacent = _residue_topology(record, pocket_length)
+            p_bb, p_bb_mask, p_sc, p_sc_mask = _pocket_angles(p_aatype, p_xyz, p_atom_mask, p_adjacent)
+            p_bb_sincos, p_sc_sincos = _angle_sin_cos(p_bb, p_bb_mask), _angle_sin_cos(p_sc, p_sc_mask)
+        else:
+            pc = {name: torch.as_tensor(value) for name, value in cached["pocket"].items()}
+            p_sequence, p_chain = pc["sequence_index"], pc["chain_index"]
+            p_bb_sincos, p_bb_mask = pc["backbone_angles_sin_cos"], pc["backbone_angle_mask"]
+            p_sc_sincos, p_sc_mask = pc["sidechain_angles_sin_cos"], pc["sidechain_angle_mask"]
 
         q_aatype_array = np.asarray(target["aatype"])
         if not np.issubdtype(q_aatype_array.dtype, np.integer):
@@ -317,9 +326,19 @@ def collate_joint_v2_records(records: list[dict[str, Any]]) -> JointV2Batch:
         # migration artifacts, not v2 labels. Both native and generated teachers
         # derive their frames and torsions from their supplied observed atoms.
         q_backbone_mask = q_atom14_mask[:, :3]
-        q_frames = observed_backbone_frames(q_atom14[:, :3], q_backbone_mask)
-        q_translation, q_rotation = q_frames.translation, q_frames.rotation
-        q_angles, _ = extract_backbone_torsions(q_atom14[:, 0], q_atom14[:, 1], q_atom14[:, 2])
+        if cached is None:
+            q_frames = observed_backbone_frames(q_atom14[:, :3], q_backbone_mask)
+            q_translation, q_rotation = q_frames.translation, q_frames.rotation
+            q_angles, _ = extract_backbone_torsions(q_atom14[:, 0], q_atom14[:, 1], q_atom14[:, 2])
+            q_angle_mask = _peptide_angle_mask(q_backbone_mask)
+            q_sidechain, q_sidechain_mask = extract_chi(q_atom14, q_atom14_mask, q_aatype)
+            q_bb_sincos = _angle_sin_cos(q_angles, q_angle_mask)
+            q_sc_sincos = _angle_sin_cos(q_sidechain, q_sidechain_mask)
+        else:
+            qc = {name: torch.as_tensor(value) for name, value in cached["peptide"].items()}
+            q_translation, q_rotation = qc["translation"], qc["rotation"]
+            q_bb_sincos, q_angle_mask = qc["backbone_angles_sin_cos"], qc["backbone_angle_mask"]
+            q_sc_sincos, q_sidechain_mask = qc["sidechain_angles_sin_cos"], qc["sidechain_angle_mask"]
         residue_mask[row, : pocket_length + peptide_length] = True
         pocket_mask[row, p] = True
         peptide_mask[row, q] = True
@@ -333,13 +352,11 @@ def collate_joint_v2_records(records: list[dict[str, Any]]) -> JointV2Batch:
         sequence_index[row, q] = torch.arange(peptide_length)
         chain_index[row, p] = p_chain
         chain_index[row, q] = int(p_chain.max()) + 1
-        pocket_backbone[row, p] = _angle_sin_cos(p_bb, p_bb_mask)
+        pocket_backbone[row, p] = p_bb_sincos
         pocket_backbone_mask[row, p] = p_bb_mask
-        pocket_sidechain[row, p] = _angle_sin_cos(p_sc, p_sc_mask)
+        pocket_sidechain[row, p] = p_sc_sincos
         pocket_sidechain_mask[row, p] = p_sc_mask
 
-        q_angle_mask = _peptide_angle_mask(q_backbone_mask)
-        q_sidechain, q_sidechain_mask = extract_chi(q_atom14, q_atom14_mask, q_aatype)
         endpoint_translation[row, q] = q_translation
         endpoint_rotation[row, q] = q_rotation
         endpoint_aatype[row, q] = q_aatype
@@ -347,9 +364,9 @@ def collate_joint_v2_records(records: list[dict[str, Any]]) -> JointV2Batch:
         target_atom14_mask[row, q] = q_atom14_mask
         backbone_xyz[row, q] = torch.where(q_backbone_mask[..., None], q_atom14[:, :3], 0.0)
         backbone_atom_mask[row, q] = q_backbone_mask
-        backbone_angles[row, q] = _angle_sin_cos(q_angles, q_angle_mask)
+        backbone_angles[row, q] = q_bb_sincos
         backbone_angle_mask[row, q] = q_angle_mask
-        sidechain_angles[row, q] = _angle_sin_cos(q_sidechain, q_sidechain_mask)
+        sidechain_angles[row, q] = q_sc_sincos
         sidechain_angle_mask[row, q] = q_sidechain_mask
 
     condition = UnifiedComplexCondition(

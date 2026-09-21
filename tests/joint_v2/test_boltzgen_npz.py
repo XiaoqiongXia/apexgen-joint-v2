@@ -13,6 +13,7 @@ from apexgen.joint_v2.data.boltz_npz import adapt_boltz_npz, audit_boltz_record,
 from apexgen.joint_v2.data.boltz_interfaces import describe_interfaces
 from apexgen.joint_v2.data.boltz_chain_pairs import adapt_interface_direction
 from apexgen.joint_v2.data.dataset import JointV2Dataset
+from apexgen.joint_v2.data.static_features import STATIC_FEATURES_SCHEMA
 from test_boltz_npz import source_arrays, adapt
 from test_boltz_chain_pairs import doubled_target, make_pair
 from test_boltz_interfaces import fixture_arrays, serialized
@@ -184,6 +185,7 @@ def test_dataset_and_collate_reject_stale_mapping(tmp_path,field):
     dataset=JointV2Dataset.__new__(JointV2Dataset)
     dataset.pockets=[record]
     dataset.target_root=None
+    dataset._static_features_schema=STATIC_FEATURES_SCHEMA
     with pytest.raises(ValueError,match='contract mismatch'):
         dataset[0]
 
@@ -309,3 +311,75 @@ def test_new_build_does_not_reopen_lmdb_to_export_csv(tmp_path, monkeypatch):
         tmp_path/'output/dataset/sample_inventory.csv').read_bytes()
     assert not (tmp_path/'output/dataset.inprogress').exists()
     assert json.loads((tmp_path/'output/dataset/build_status.json').read_text())['status'] == 'complete'
+
+
+def test_cached_native_source_reuses_parse_and_preserves_every_field(tmp_path, monkeypatch):
+    from apexgen.joint_v2.data.boltz_source import BoltzSource
+    from apexgen.joint_v2.data.boltz_chain_pairs import adapt_interface_direction, fragment_selections
+    from apexgen.shared.storage.store import pack_record
+    path, _ = make_pair(tmp_path, model_length=9)
+    with np.load(path, allow_pickle=False) as archive:
+        arrays = {key: archive[key] for key in archive.files}
+    np.savez(path, **native_arrays(arrays))
+    payload = path.read_bytes()
+    pairs, _ = describe_interfaces(payload, dict(source_archive=str(path), source_member=path.name,
+        source_npz_filename=path.name, source_structure_id=path.stem, source_offset=0, source_size=len(payload)))
+    pair = pairs[0]
+    expected = []
+    for direction in ('a_to_b', 'b_to_a'):
+        for selection in fragment_selections(pair, direction):
+            if selection['fragment_length'] >= 4:
+                record, audit = adapt_interface_direction(path, pair, direction, fragment_index=selection['fragment_index'])
+                expected.append((direction, selection['fragment_index'], pack_record(record), audit))
+    cached = BoltzSource(path)
+    def no_reopen(*args, **kwargs):
+        raise AssertionError('cached conversion must not reopen the NPZ')
+    monkeypatch.setattr(np, 'load', no_reopen)
+    for _ in range(2):
+        for direction, index, packed, audit in expected:
+            actual, checked = adapt_interface_direction(path, pair, direction, fragment_index=index, source=cached)
+            assert pack_record(actual) == packed
+            assert checked == audit
+    with pytest.raises(ValueError):
+        cached.data['atoms'][0] = cached.data['atoms'][0]
+    path.write_bytes(payload + b'changed')
+    with pytest.raises(ValueError, match='changed after cached parsing'):
+        cached.check_path(path)
+
+
+def test_parallel_and_serial_builds_have_identical_samples_and_audits(tmp_path):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from scripts.data.prepare_joint_v2_boltz_chain_pairs import build_dataset
+    from apexgen.joint_v2.data.boltz_interfaces import PAIR_SCHEMA
+    from apexgen.shared.storage.store import pack_record
+    _, pair = make_pair(tmp_path, model_length=9)
+    inventory = tmp_path/'pairs.parquet'
+    pq.write_table(pa.Table.from_pylist([pair], schema=PAIR_SCHEMA), inventory)
+    serial, parallel = tmp_path/'serial', tmp_path/'parallel'
+    a = build_dataset(inventory, serial, workers=1, shard_size=2)
+    b = build_dataset(inventory, parallel, workers=2, shard_size=2, commit_size=64, compression='zlib')
+    assert a['counts'] == b['counts']
+    assert a['rejection_reasons'] == b['rejection_reasons']
+    assert (serial/'directions.jsonl').read_bytes() == (parallel/'directions.jsonl').read_bytes()
+    left, right = JointV2Dataset(serial, split='smoke'), JointV2Dataset(parallel, split='smoke')
+    try:
+        assert len(left) == len(right) > 0
+        for i in range(len(left)):
+            x, y = left[i], right[i]
+            for key in ('raw_path', 'source_recorded_raw_path'):
+                x[key] = y[key] = 'normalized-output-root'
+            assert pack_record(x) == pack_record(y)
+    finally:
+        left.close(); right.close()
+
+
+def test_compressed_storage_roundtrip_and_corruption(tmp_path):
+    import zlib
+    from apexgen.shared.storage.store import pack_record, unpack_record
+    record = adapt(tmp_path, native_arrays(source_arrays()))
+    packed = pack_record(record, compression='zlib')
+    assert pack_record(unpack_record(packed)) == pack_record(record)
+    assert len(packed) < len(pack_record(record))
+    with pytest.raises(zlib.error):
+        unpack_record(packed[:-3])
